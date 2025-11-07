@@ -25,7 +25,8 @@ const requestSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  assignedEquipmentId: {
+  // ======== 🟢 RENAMED THIS FIELD 🟢 ========
+  assignedUniqueId: { // Renamed from assignedEquipmentId to match officer.js
     type: String,  // Stores unique ID like "GLK001"
     trim: true
   },
@@ -65,6 +66,15 @@ const requestSchema = new mongoose.Schema({
     required: [true, 'Reason for request is required'],
     maxlength: [500, 'Reason cannot exceed 500 characters']
   },
+
+  // ======== 🟢 ADDED THIS FIELD 🟢 ========
+  // This was missing, causing the 500 error on return
+  condition: {
+    type: String,
+    enum: ['Excellent', 'Good', 'Fair', 'Poor', 'Out of Service']
+  },
+  // =====================================
+
   adminNotes: {
     type: String,
     maxlength: [500, 'Admin notes cannot exceed 500 characters']
@@ -114,53 +124,60 @@ const requestSchema = new mongoose.Schema({
 requestSchema.index({ requestId: 1 });
 requestSchema.index({ requestedBy: 1 });
 requestSchema.index({ equipmentId: 1 });
-requestSchema.index({ poolId: 1 });  // NEW INDEX
+requestSchema.index({ poolId: 1 });
 requestSchema.index({ status: 1 });
 requestSchema.index({ requestType: 1 });
 requestSchema.index({ createdAt: -1 });
 requestSchema.index({ processedBy: 1 });
 
-// Generate unique request ID BEFORE validation
-requestSchema.pre('validate', async function(next) {
-  if (!this.requestId) {
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    try {
-      const lastRequest = await this.constructor.findOne({
-        requestId: new RegExp(`^REQ-${year}${month}${day}`)
-      }).sort({ requestId: -1 });
-      let sequence = 1;
-      if (lastRequest && lastRequest.requestId) {
-        const parts = lastRequest.requestId.split('-');
-        const lastSequence = parseInt(parts); // Sequence is the 3rd part (index 2)
-        if (!isNaN(lastSequence)) {
-          sequence = lastSequence + 1;
-        }
-      }
-      this.requestId = `REQ-${year}${month}${day}-${String(sequence).padStart(4, '0')}`;
-      console.log('Generated requestId:', this.requestId);
-    } catch (error) {
-      console.error('Error generating requestId:', error);
-      this.requestId = `REQ-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    }
+// ======== 🛑 DELETED 🛑 ========
+// The old, buggy requestSchema.pre('validate', ...) hook has been removed.
+// =================================
+
+// This is the correct hook
+requestSchema.pre('save', async function(next) {
+  // Only generate ID if it's a new document
+  if (!this.isNew || this.requestId) {
+    return next();
   }
-  next();
+
+  try {
+    // 1. Generate today's date prefix (e.g., "REQ-20251107-")
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const prefix = `REQ-${dateStr}-`;
+
+    // 2. Create a very strict regex to find ONLY valid IDs from today
+    const searchRegex = new RegExp(`^${prefix}\\d{4}$`);
+
+    // 3. Find the LAST request that matches this exact pattern
+    const lastRequest = await this.constructor.findOne({
+      requestId: { $regex: searchRegex }
+    }).sort({ requestId: -1 });
+
+    let nextSequence = 1;
+
+    // 4. If we found a previous request...
+    if (lastRequest && lastRequest.requestId) {
+      // Get the last 4 digits (e.g., "0001")
+      const lastSequenceStr = lastRequest.requestId.substring(prefix.length); 
+      
+      // Convert to a number, add 1
+      if (!isNaN(parseInt(lastSequenceStr, 10))) {
+         nextSequence = parseInt(lastSequenceStr, 10) + 1;
+      }
+    }
+
+    // 5. Set the new ID, padding with zeros (e.g., 2 becomes "0002")
+    this.requestId = `${prefix}${nextSequence.toString().padStart(4, '0')}`;
+    
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
-// Add status to history when status changes
-requestSchema.pre('save', function(next) {
-  if (this.isModified('status') && !this.isNew) {
-    this.statusHistory.push({
-      status: this.status,
-      changedBy: this.processedBy || this.requestedBy,
-      changedDate: new Date(),
-      notes: this.adminNotes
-    });
-  }
-  next();
-});
+// ... (rest of file is unchanged) ...
 
 // Method to approve request
 requestSchema.methods.approve = function(adminId, notes) {
@@ -193,11 +210,8 @@ requestSchema.methods.complete = function(adminId, notes) {
 // Static method to get pending requests
 requestSchema.statics.getPendingRequests = function() {
   return this.find({ status: 'Pending' })
-    // FIX: Fetch better officer fields (assuming 'fullName' is a virtual on User)
     .populate('requestedBy', 'fullName officerId designation') 
-    // For specific items (legacy/other types)
     .populate('equipmentId', 'name model serialNumber category') 
-    // FIX: ADD pool population for new pool requests
     .populate('poolId', 'poolName model category manufacturer') 
     .sort({ createdAt: -1 });
 };

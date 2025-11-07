@@ -31,7 +31,7 @@ const OfficerDashboard = () => {
       setLoading(true);
       const response = await officerAPI.getDashboard();
       if (response.data.success) {
-        setDashboardData(response.data.data); // data.data contains { stats: {...}, recentActivity: [...] }
+        setDashboardData(response.data.data);
       }
     } catch (error) {
       toast.error('Failed to fetch dashboard data');
@@ -87,7 +87,7 @@ const OfficerDashboard = () => {
 };
 
 const OfficerDashboardStats = ({ stats, recentActivity }) => {
-  if (!stats) return null; // Wait for stats to be loaded
+  if (!stats) return null;
 
   return (
     <div className="dashboard-overview">
@@ -111,7 +111,7 @@ const OfficerDashboardStats = ({ stats, recentActivity }) => {
           icon="✅"
           title="Available Equipment"
           value={stats.availableEquipment}
-          subtitle="Pools ready to request" // Updated text
+          subtitle="Pools ready to request"
           color="green"
         />
       </div>
@@ -127,7 +127,8 @@ const OfficerDashboardStats = ({ stats, recentActivity }) => {
                     {request.poolId?.poolName || 'Request'}
                   </div>
                   <div className="activity-meta">
-                    {request.requestType} • {new Date(request.createdAt).toLocaleDateString()}
+                    {/* ======== 🟢 MODIFIED 🟢 ======== */}
+                    {request.requestType} • {new Date(request.createdAt).toLocaleString()}
                   </div>
                 </div>
                 <div className="activity-status">
@@ -226,11 +227,9 @@ const MyRequests = () => {
                   <div className="request-details">
                     <h4>{request.poolId?.poolName || 'Equipment Request'}</h4>
                     <p className="request-meta">
-                      {/* Use poolId.model */}
-                      {request.poolId?.model} • {request.requestType} • {new Date(request.createdAt).toLocaleDateString()}
-                    {/* ======== 🟢 MODIFIED 🟢 ======== */}
-                    {/* Replaced '</E -' with '</p>' */}
-                    </p> 
+                      {/* ======== 🟢 MODIFIED 🟢 ======== */}
+                      {request.poolId?.model} • {request.requestType} • {new Date(request.createdAt).toLocaleString()}
+                    </p>
                     <p className="request-reason">{request.reason}</p>
                   </div>
 
@@ -283,6 +282,8 @@ const MyRequests = () => {
     </>
   );
 };
+
+// ... (StatCard, formatSectionTitle, CancelConfirmationModal are unchanged) ...
 
 const StatCard = ({ icon, title, value, subtitle, color, urgent }) => (
   <div className={`stat-card ${color} ${urgent ? 'urgent' : ''}`}>

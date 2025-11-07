@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { adminAPI, equipmentAPI } from '../../utils/api';
+import { adminAPI } from '../../utils/api'; 
 import { toast } from 'react-toastify';
 
 const ProcessRequests = () => {
@@ -94,9 +93,9 @@ const ProcessRequests = () => {
               className="form-control"
             >
               <option value="">All Types</option>
-              <option value="Checkout">Checkout</option>
+              <option value="Issue">Issue</option> 
               <option value="Return">Return</option>
-              <option value="Damage Report">Damage Report</option>
+              <option value="Maintenance">Maintenance</option>
             </select>
           </div>
         </div>
@@ -116,7 +115,7 @@ const ProcessRequests = () => {
                     <th>Equipment Name</th>
                     <th>Type</th>
                     <th>Priority</th>
-                    <th>Date</th>
+                    <th>Date & Time</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -124,16 +123,14 @@ const ProcessRequests = () => {
                 <tbody>
                   {requests.map((request) => (
                     <tr key={request._id}>
-                      <td>{request._id.slice(-8).toUpperCase()}</td>
+                      <td>{request.requestId || request._id.slice(-8).toUpperCase()}</td>
                       <td>
                         {request.requestedBy 
-                          ? `${request.requestedBy.firstName} ${request.requestedBy.lastName}` 
+                          ? request.requestedBy.fullName 
                           : 'N/A'}
                       </td>
                       <td>
-                        {request.equipmentId 
-                          ? request.equipmentId.name 
-                          : 'N/A'}
+                        {request.poolId?.poolName || request.poolName || request.equipmentId?.name || 'N/A'}
                       </td>
                       <td>
                         <span className={`badge badge-${request.requestType === 'Issue' ? 'info' : 'warning'}`}>
@@ -145,7 +142,8 @@ const ProcessRequests = () => {
                           {request.priority}
                         </span>
                       </td>
-                      <td>{new Date(request.createdAt).toLocaleDateString()}</td>
+                      {/* ======== 🟢 MODIFIED 🟢 ======== */}
+                      <td>{new Date(request.createdAt).toLocaleString()}</td>
                       <td>
                         <span className={`badge badge-${getStatusBadgeClass(request.status)}`}>
                           {request.status}
@@ -223,9 +221,12 @@ const ProcessRequests = () => {
   );
 };
 
+// ... (ApprovalModal, RejectionModal, and helper functions are unchanged) ...
+
 const ApprovalModal = ({ request, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
-    notes: ''
+    notes: '',
+    condition: request.condition || 'Good' 
   });
   const [loading, setLoading] = useState(false);
 
@@ -243,18 +244,6 @@ const ApprovalModal = ({ request, onClose, onSuccess }) => {
     try {
       await adminAPI.approveRequest(request._id, formData);
       toast.success('Request approved successfully');
-
-      if (request.requestType === 'Return' && request.equipmentId?._id) {
-        try {
-          await equipmentAPI.updateEquipment(request.equipmentId._id, {
-            status: 'Available'
-          });
-          toast.success('Equipment marked as Available');
-        } catch (error) {
-          console.error('Failed to update equipment status:', error);
-        }
-      }
-
       onSuccess();
     } catch (error) {
       toast.error('Failed to approve request');
@@ -267,11 +256,40 @@ const ApprovalModal = ({ request, onClose, onSuccess }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Approve Request: {request._id.slice(-8).toUpperCase()}</h3>
+          <h3>Approve Request: {request.requestId || request._id.slice(-8).toUpperCase()}</h3>
           <button onClick={onClose} className="close-btn">&times;</button>
         </div>
 
         <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Officer's Reason</label>
+            <textarea
+              className="form-control"
+              rows="2"
+              value={request.reason}
+              readOnly
+            />
+          </div>
+
+          {request.requestType === 'Return' && (
+            <div className="form-group">
+              <label className="form-label">Officer Reported Condition</label>
+              <select
+                name="condition"
+                value={formData.condition}
+                onChange={handleChange}
+                className="form-control"
+              >
+                <option value="Excellent">Excellent</option>
+                <option value="Good">Good</option>
+                <option value="Fair">Fair</option>
+                <option value="Poor">Poor</option>
+                <option value="Out of Service">Out of Service</option>
+              </select>
+              <small>Confirm the condition before approving the return.</small>
+            </div>
+          )}
+
           <div className="form-group">
             <label className="form-label">Approval Notes (Optional)</label>
             <textarea
@@ -279,7 +297,7 @@ const ApprovalModal = ({ request, onClose, onSuccess }) => {
               value={formData.notes}
               onChange={handleChange}
               className="form-control"
-              rows="4"
+              rows="3"
               placeholder="Add any additional notes for this approval..."
             />
           </div>
@@ -345,11 +363,21 @@ const RejectionModal = ({ request, onClose, onSuccess }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Reject Request: {request._id.slice(-8).toUpperCase()}</h3>
+          <h3>Reject Request: {request.requestId || request._id.slice(-8).toUpperCase()}</h3>
           <button onClick={onClose} className="close-btn">&times;</button>
         </div>
 
         <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Officer's Reason for Request</label>
+            <textarea
+              className="form-control"
+              rows="2"
+              value={request.reason}
+              readOnly
+            />
+          </div>
+
           <div className="form-group">
             <label className="form-label">Reason for Rejection <span style={{ color: 'red' }}>*</span></label>
             <textarea
@@ -360,18 +388,6 @@ const RejectionModal = ({ request, onClose, onSuccess }) => {
               rows="3"
               placeholder="Please provide a detailed reason for rejection..."
               required
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Admin Notes (Optional)</label>
-            <textarea
-              name="adminNotes"
-              value={formData.adminNotes}
-              onChange={handleChange}
-              className="form-control"
-              rows="3"
-              placeholder="Add any additional internal notes..."
             />
           </div>
 

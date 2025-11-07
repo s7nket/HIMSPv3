@@ -137,11 +137,17 @@ router.get('/requests', officerOnly, async (req, res) => {
 // @desc    Create new equipment request (now ONLY for pool item returns)
 // @access  Private (Officer only)
 router.post('/requests', officerOnly, [
+  // ... (validations)
   body('poolId').isMongoId().withMessage('Valid pool ID is required'),
   body('uniqueId').trim().notEmpty().withMessage('Valid item unique ID is required'),
   body('requestType').isIn(['Return', 'Maintenance']).withMessage('Valid request type is required (Issue requests use a different route)'),
-  body('reason').isLength({ min: 1, max: 500 }).withMessage('Reason is required and cannot exceed 500 characters'),
+  body('reason').isLength({ min: 1, max: 100 }).withMessage('Reason is required and cannot exceed 100 characters'),
   body('priority').optional().isIn(['Low', 'Medium', 'High', 'Urgent']),
+
+  // ======== 🟢 ADDED 🟢 ========
+  // Add validation for the 'condition' field from the form
+  body('condition').isIn(['Excellent', 'Good', 'Fair', 'Poor', 'Out of Service']).withMessage('Valid condition is required'),
+  
   body('expectedReturnDate').optional().isISO8601().withMessage('Valid date format required')
 ], async (req, res) => {
   try {
@@ -154,14 +160,15 @@ router.post('/requests', officerOnly, [
       });
     }
 
-    const { 
-      poolId, uniqueId, 
-      requestType, reason, priority, expectedReturnDate 
-    } = req.body;
+    const {
+      poolId, uniqueId,
+      requestType, reason, priority, expectedReturnDate,
+      condition // ======== 🟢 ADDED 🟢 ========
+    } = req.body; // Destructure the 'condition' from the request body
 
     let pool;
     let item;
-    
+
     pool = await EquipmentPool.findById(poolId);
     if (!pool) {
       return res.status(404).json({ success: false, message: 'Equipment pool not found' });
@@ -170,17 +177,18 @@ router.post('/requests', officerOnly, [
     if (!item) {
       return res.status(404).json({ success: false, message: 'Item not found in pool' });
     }
-    
+
+    // This logic is correct
     if (requestType === 'Return') {
-      if (item.status !== 'Issued' || 
-          !item.currentlyIssuedTo || 
+      if (item.status !== 'Issued' ||
+          !item.currentlyIssuedTo ||
           !item.currentlyIssuedTo.userId.equals(req.user._id)) {
         return res.status(400).json({
           success: false,
           message: 'This pool item is not issued to you'
         });
       }
-    } 
+    }
 
     const request = new Request({
       requestedBy: req.user._id,
@@ -189,10 +197,11 @@ router.post('/requests', officerOnly, [
       requestType,
       reason,
       priority: priority || 'Medium',
+      condition: condition, // ======== 🟢 ADDED 🟢 ========
       ...(expectedReturnDate && { expectedReturnDate: new Date(expectedReturnDate) })
     });
 
-    await request.save();
+    await request.save(); // This was failing, but now should work
 
     const populatedRequest = await Request.findById(request._id)
       .populate('poolId', 'poolName model category')
@@ -205,7 +214,7 @@ router.post('/requests', officerOnly, [
     });
 
   } catch (error) {
-    console.error('Create request error:', error);
+    console.error('Create request error:', error); // This will now show the Mongoose error if it's different
     res.status(500).json({
       success: false,
       message: 'Server error creating request',
