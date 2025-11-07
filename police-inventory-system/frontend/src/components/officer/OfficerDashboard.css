@@ -1077,3 +1077,53 @@ textarea.form-control {
   color: var(--text-light);
   font-size: 14px;
 }
+
+/* Styles for the new "Available Items" list inside the modal */
+.detail-section {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  padding: 12px;
+  border-radius: 6px;
+  margin-top: 15px;
+}
+
+.detail-section label {
+  font-weight: 600;
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.item-history-list {
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.item-history-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid #eee;
+}
+.item-history-row:last-child {
+  border-bottom: none;
+}
+
+.item-history-row span {
+  font-size: 0.9rem;
+  color: #212529;
+}
+
+.item-history-row .btn-sm {
+  padding: 2px 8px;
+  font-size: 0.75rem;
+}
+
+/* Make the history modal a bit wider */
+.equipment-details-modal {
+  max-width: 700px;
+}

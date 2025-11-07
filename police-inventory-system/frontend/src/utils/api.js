@@ -186,7 +186,10 @@ export const adminAPI = {
   getRequests: (params) => api.get('/admin/requests', { params }),
   approveRequest: (id, data) => api.put(`/admin/requests/${id}/approve`, data),
   rejectRequest: (id, data) => api.put(`/admin/requests/${id}/reject`, data),
-  getReports: (params) => api.get('/admin/reports/summary', { params })
+  getReports: (params) => api.get('/admin/reports/summary', { params }),
+  
+  // ======== 🟢 ADDED 🟢 ========
+  getUserHistory: (userId) => api.get(`/admin/users/${userId}/history`),
 };
 
 export const officerAPI = {
@@ -199,26 +202,22 @@ export const officerAPI = {
   getEquipmentDetails: (id) => api.get(`/officer/equipment/${id}`),
   getAuthorizedEquipmentPools: (params) => {
     console.log('🔄 GET /equipment/authorized-pools', params);
-    // This endpoint is in equipment.js, but let's check officer.js
-    // officer.js doesn't have it. equipment.js has it. But it's not adminOnly.
-    // Let's use the one from equipment.js, it seems correct.
     return api.get('/equipment/authorized-pools', { params });
   },
   
-  // ======== 🟢 ADDED 🟢 ========
-  // This function was missing, causing RequestEquipment.js to fail
   requestEquipmentFromPool: (data) => {
     console.log('🔄 POST /officer/equipment-requests/from-pool', data);
     return api.post('/officer/equipment-requests/from-pool', data);
-  }
+  },
+
+  // ======== 🟢 ADDED 🟢 ========
+  getMyHistory: () => api.get('/officer/my-history'),
 };
 
 
 // ============================================
 // EQUIPMENT POOL API ENDPOINTS (ADD TO api.js)
 // ============================================
-
-// Add these to your equipmentAPI object in utils/api.js
 
 export const equipmentAPI = {
   // ... existing equipment methods ...
