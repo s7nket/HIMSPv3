@@ -1,4 +1,3 @@
-
 const mongoose = require('mongoose');
 
 // Equipment Pool Schema - For managing groups of identical equipment
@@ -178,18 +177,40 @@ const equipmentPoolSchema = new mongoose.Schema({
     
     // Maintenance History for THIS Item
     maintenanceHistory: [{
-      date: {
+      // ======== 🟢 MODIFIED THIS ENTIRE BLOCK 🟢 ========
+      reportedDate: {
         type: Date,
+        required: true
+      },
+      reportedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      reason: {
+        type: String,
         required: true
       },
       type: {
         type: String,
-        enum: ['Routine', 'Repair', 'Inspection', 'Upgrade', 'Cleaning']
+        enum: ['Routine', 'Repair', 'Inspection', 'Upgrade', 'Cleaning'],
+        default: 'Repair'
       },
-      description: String,
-      cost: Number,
-      performedBy: String,
+      fixedDate: {
+        type: Date
+      },
+      action: {
+        type: String
+      },
+      fixedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      cost: {
+        type: Number,
+        min: 0
+      },
       nextMaintenanceDate: Date
+      // ===============================================
     }],
     
     // Item-specific dates
@@ -260,9 +281,21 @@ equipmentPoolSchema.methods.updateCounts = function() {
   this.damagedCount = items.filter(item => item.status === 'Damaged').length;
 };
 
-// Method to get next available item
+// Method to get next available item (Prioritizes by condition)
 equipmentPoolSchema.methods.getNextAvailableItem = function() {
-  return this.items.find(item => item.status === 'Available');
+  
+  const availableItems = this.items.filter(item => item.status === 'Available');
+
+  const excellent = availableItems.find(item => item.condition === 'Excellent');
+  if (excellent) return excellent;
+
+  const good = availableItems.find(item => item.condition === 'Good');
+  if (good) return good;
+  
+  const fair = availableItems.find(item => item.condition === 'Fair');
+  if (fair) return fair;
+
+  return undefined;
 };
 
 // Method to find item by unique ID
@@ -278,12 +311,10 @@ equipmentPoolSchema.methods.issueItem = async function(userId, officerId, office
     throw new Error('No available items in pool');
   }
   
-  // Check authorization
   if (!this.authorizedDesignations.includes(designation)) {
     throw new Error(`This equipment is not authorized for ${designation}`);
   }
   
-  // Update item status
   availableItem.status = 'Issued';
   availableItem.currentlyIssuedTo = {
     userId,
@@ -294,7 +325,6 @@ equipmentPoolSchema.methods.issueItem = async function(userId, officerId, office
     purpose: purpose || 'Regular Duty'
   };
   
-  // Add to history
   availableItem.usageHistory.push({
     userId,
     officerId,
@@ -306,14 +336,13 @@ equipmentPoolSchema.methods.issueItem = async function(userId, officerId, office
     issuedBy
   });
   
-  // Update counts
   this.updateCounts();
-  
   await this.save();
   return availableItem;
 };
 
 // Method to return item to pool
+// ======== 🟢 REPLACED THIS ENTIRE METHOD 🟢 ========
 equipmentPoolSchema.methods.returnItem = async function(uniqueId, condition, remarks, returnedTo) {
   const item = this.findItemByUniqueId(uniqueId);
   
@@ -325,24 +354,41 @@ equipmentPoolSchema.methods.returnItem = async function(uniqueId, condition, rem
     throw new Error('Item is not currently issued');
   }
   
+  const finalCondition = condition || item.condition;
+
   // Update latest history entry
   const latestHistory = item.usageHistory[item.usageHistory.length - 1];
   latestHistory.returnedDate = new Date();
-  latestHistory.conditionAtReturn = condition || item.condition;
-  latestHistory.remarks = remarks || '';
+  latestHistory.conditionAtReturn = finalCondition;
+  latestHistory.remarks = remarks || ''; // This saves the officer's return reason
   latestHistory.returnedTo = returnedTo;
   
-  // Calculate days used
   const issuedDate = new Date(latestHistory.issuedDate);
   const returnedDate = new Date(latestHistory.returnedDate);
   latestHistory.daysUsed = Math.ceil((returnedDate - issuedDate) / (1000 * 60 * 60 * 24));
   
-  // Clear current assignment
   item.currentlyIssuedTo = undefined;
-  item.status = 'Available';
-  item.condition = condition || item.condition;
+  item.condition = finalCondition;
   
-  // Update counts
+  // Triage logic: Poor items go to maintenance
+  if (finalCondition === 'Poor' || finalCondition === 'Out of Service') {
+    item.status = 'Maintenance';
+    
+    // Auto-create a maintenance log entry
+    item.maintenanceHistory.push({
+      reportedDate: new Date(),
+      reportedBy: latestHistory.userId, // The officer who returned it
+      reason: `Item returned in ${finalCondition} condition. Reason: ${remarks || 'N/A'}.`,
+      type: 'Inspection',
+      action: 'Awaiting repair...',
+      fixedBy: null
+    });
+    
+  } else {
+    // Item is Good, Fair, or Excellent
+    item.status = 'Available';
+  }
+
   this.updateCounts();
   
   await this.save();

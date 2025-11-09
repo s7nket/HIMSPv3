@@ -1127,3 +1127,201 @@ textarea.form-control {
 .equipment-details-modal {
   max-width: 700px;
 }
+
+/* Officer history collapse style */
+.history-list {
+  border: 1px solid var(--color-border-light);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.history-item {
+  border-bottom: 1px solid var(--color-border-light);
+}
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #fff;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.history-item-header:hover {
+  background-color: #f8f9fa;
+}
+
+.history-item-title {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+/* Style for the expand/collapse icon */
+.history-item-header::after {
+  content: '+';
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  transition: transform 0.2s ease;
+}
+
+.history-item-header.expanded::after {
+  content: '−'; /* This is a minus sign */
+  transform: rotate(180deg);
+}
+
+.history-item-details {
+  padding: 16px;
+  background-color: #fdfdfd;
+  border-top: 1px dashed var(--color-border-light);
+}
+
+/* Use the existing detail-grid styles */
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 768px) {
+  .detail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.detail-item {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+.detail-item strong {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 2px;
+}
+
+/* In: frontend/src/components/officer/OfficerDashboard.css */
+
+/* ... (add this to your existing file) ... */
+
+.history-list {
+  border: 1px solid var(--color-border-light, #e0e0e0);
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #fff;
+}
+
+.history-item {
+  border-bottom: 1px solid var(--color-border-light, #e0e0e0);
+}
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #fff;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.history-item-header:hover {
+  background-color: #f8f9fa;
+}
+
+.history-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-item-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--color-text-primary, #212529);
+}
+
+.history-item-daterange {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary, #6c757d);
+  font-weight: 500;
+}
+
+/* Style for the expand/collapse icon */
+.history-item-header::after {
+  content: '+';
+  font-size: 1.5rem;
+  font-weight: 300;
+  color: var(--color-primary, #007bff);
+  transition: transform 0.2s ease;
+}
+
+.history-item-header.expanded {
+  background-color: #f8f9fa;
+}
+
+.history-item-header.expanded::after {
+  content: '−'; /* This is a minus sign */
+  transform: rotate(180deg);
+}
+
+.history-item-details {
+  padding: 16px;
+  background-color: #fdfdfd;
+  border-top: 1px dashed var(--color-border-light, #e0e0e0);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.detail-subheader {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #343a40);
+  margin-top: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-border-light, #e0e0e0);
+}
+.history-item-details .detail-subheader:first-of-type {
+  margin-top: 0;
+}
+
+/* Use the existing detail-grid styles */
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px; /* Increased gap */
+}
+
+@media (min-width: 768px) {
+  .detail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.detail-item {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary, #495057);
+  line-height: 1.4;
+}
+
+.detail-item strong {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text-primary, #343a40);
+  margin-bottom: 2px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

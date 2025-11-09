@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const EquipmentPool = require('../models/EquipmentPool');
 const User = require('../models/User');
+const Request = require('../models/Request');
 const { auth } = require('../middleware/auth');
 const { adminOnly } = require('../middleware/roleCheck');
 
@@ -80,12 +81,9 @@ router.get('/authorized-pools', async (req, res) => {
     };
     
     const pools = await EquipmentPool.find(query)
-      // ======== 🟢 MODIFIED 🟢 ========
-      // Added 'items' so that updateCounts() works correctly
       .select('poolName category model totalQuantity availableCount issuedCount items manufacturer location')
       .sort({ poolName: 1 });
     
-    // This loop will now work correctly because 'items' was fetched
     for (const pool of pools) {
       pool.updateCounts();
     }
@@ -220,17 +218,10 @@ router.post('/pools', adminOnly, [
 // @route GET /api/equipment/pools/:poolId
 // @desc Get specific pool details
 // @access Private
-// Inside equipment.js
-
-// @route GET /api/equipment/pools/:poolId
-// @desc Get specific pool details
-// @access Private
 router.get('/pools/:poolId', async (req, res) => {
   try {
-    const pool = await EquipmentPool.findById(req.params.poolId)
-      .populate('addedBy', 'fullName officerId')
-      .populate('items.currentlyIssuedTo.userId', 'fullName officerId designation')
-      .populate('items.usageHistory.userId', 'fullName officerId designation');
+    // 1. Find the pool *without* deep populates
+    const pool = await EquipmentPool.findById(req.params.poolId);
     
     if (!pool) {
       return res.status(404).json({
@@ -239,23 +230,15 @@ router.get('/pools/:poolId', async (req, res) => {
       });
     }
 
-    // ======== 🟢 ADD THIS FIX-IT CODE 🟢 ========
-    let fixedCount = 1;
-    pool.items.forEach(item => {
-        // This will find any item that IS NOT 'Issued', 'Maintenance', etc.
-        if (!['Issued', 'Maintenance', 'Damaged', 'Lost', 'Retired'].includes(item.status)) {
-            item.status = 'Available'; // Force it to the correct string
-            fixedCount++;
-        }
-    });
-    
-    if (fixedCount > 0) {
-        console.log(`FIXED ${fixedCount} ITEMS TO 'Available'`);
-        pool.updateCounts(); // Recalculate based on the fix
-        await pool.save(); // Save the fix to the database
-    }
-    // =============================================
-    
+    // 2. Populate all nested fields on the retrieved document
+    await pool.populate([
+      { path: 'addedBy', select: 'fullName officerId' },
+      { path: 'items.currentlyIssuedTo.userId', select: 'fullName officerId designation' },
+      { path: 'items.usageHistory.userId', select: 'fullName officerId designation' },
+      { path: 'items.maintenanceHistory.reportedBy', select: 'fullName officerId' },
+      { path: 'items.maintenanceHistory.fixedBy', select: 'fullName officerId' }
+    ]);
+        
     pool.updateCounts(); // This line was already here
     
     res.json({
@@ -391,31 +374,52 @@ router.post('/pools/:poolId/return', adminOnly, [
   }
 });
 
-// @route GET /api/equipment/pools/:poolId/items/:uniqueId/history
-// @desc Get complete history of specific item
-// @access Private
-router.get('/pools/:poolId/items/:uniqueId/history', async (req, res) => {
+// @route   GET /api/equipment/pools/:poolId/items/:uniqueId/history
+// @desc    Get complete history of specific item
+router.get('/pools/:poolId/items/:uniqueId/history', auth, async (req, res) => {
   try {
-    const pool = await EquipmentPool.findById(req.params.poolId)
-      .populate('items.usageHistory.userId', 'fullName officerId designation')
-      .populate('items.usageHistory.issuedBy', 'fullName officerId')
-      .populate('items.usageHistory.returnedTo', 'fullName officerId');
+    const { poolId, uniqueId } = req.params;
+
+    // 1. Find the pool *without* the problematic deep populates
+    const pool = await EquipmentPool.findById(poolId);
     
     if (!pool) {
-      return res.status(404).json({
-        success: false,
-        message: 'Equipment pool not found'
-      });
+      return res.status(404).json({ success: false, message: 'Equipment pool not found' });
     }
-    
-    const item = pool.findItemByUniqueId(req.params.uniqueId);
+
+    // 2. Now, populate the nested fields on the retrieved document.
+    await pool.populate([
+      {
+        path: 'items.usageHistory.userId',
+        select: 'fullName officerId'
+      },
+      {
+        path: 'items.usageHistory.issuedBy',
+        select: 'fullName officerId'
+      },
+      {
+        path: 'items.usageHistory.returnedTo',
+        select: 'fullName officerId'
+      },
+      {
+        path: 'items.maintenanceHistory.reportedBy',
+        select: 'fullName officerId'
+      },
+      {
+        path: 'items.maintenanceHistory.fixedBy',
+        select: 'fullName officerId'
+      }
+    ]);
+
+    const item = pool.findItemByUniqueId(uniqueId);
     if (!item) {
-      return res.status(404).json({
-        success: false,
-        message: 'Item not found in pool'
-      });
+      return res.status(404).json({ success: false, message: 'Item not found in pool' });
     }
-    
+
+    // Send the two separate, sorted arrays
+    const usageHistory = item.usageHistory.sort((a, b) => new Date(b.issuedDate) - new Date(a.issuedDate));
+    const maintenanceHistory = item.maintenanceHistory.sort((a, b) => new Date(b.reportedDate) - new Date(a.reportedDate));
+
     res.json({
       success: true,
       data: {
@@ -423,11 +427,11 @@ router.get('/pools/:poolId/items/:uniqueId/history', async (req, res) => {
         uniqueId: item.uniqueId,
         currentStatus: item.status,
         currentCondition: item.condition,
-        usageHistory: item.usageHistory,
-        maintenanceHistory: item.maintenanceHistory
+        usageHistory: usageHistory,
+        maintenanceHistory: maintenanceHistory
       }
     });
-    
+
   } catch (error) {
     console.error('Get item history error:', error);
     res.status(500).json({
@@ -550,8 +554,92 @@ router.delete('/pools/:poolId', adminOnly, async (req, res) => {
   }
 });
 
-// 🛑
-// 🛑 ALL ROUTES FOR THE OLD Equipment.js MODEL HAVE BEEN REMOVED FROM HERE
-// 🛑
+// @route   POST /api/equipment/pools/complete-maintenance
+// @desc    Mark an item as repaired and available
+// @access  Private (Admin only)
+router.post('/pools/complete-maintenance', adminOnly, [
+  body('poolId').isMongoId(),
+  body('uniqueId').notEmpty(),
+  body('description').notEmpty().withMessage('Repair action description is required'), // This is the "action"
+  body('condition').isIn(['Excellent', 'Good']).withMessage('Final condition must be Excellent or Good'),
+  body('cost').optional().isNumeric()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { poolId, uniqueId, description, condition, cost } = req.body;
+    
+    const pool = await EquipmentPool.findById(poolId);
+    if (!pool) {
+      return res.status(404).json({ success: false, message: 'Pool not found' });
+    }
+
+    const item = pool.findItemByUniqueId(uniqueId);
+    if (!item) {
+      return res.status(404).json({ success: false, message: 'Item not found in pool' });
+    }
+    
+    if (item.status !== 'Maintenance') {
+      return res.status(400).json({ success: false, message: 'Item is not currently under maintenance' });
+    }
+    
+    // 1. Update the item's status
+    item.status = 'Available';
+    item.condition = condition;
+
+    // 2. Find the "Pending" log entry and update it
+    let logEntry = item.maintenanceHistory.find(
+      (entry) => !entry.fixedBy
+    );
+    
+    if (logEntry) {
+      logEntry.fixedDate = new Date();
+      logEntry.action = description; // The admin's repair notes
+      logEntry.fixedBy = req.user._id; // The admin who fixed it
+      logEntry.cost = cost;
+    } else {
+      // Fallback if no pending entry was found
+      item.maintenanceHistory.push({
+        reportedDate: new Date(),
+        reportedBy: req.user._id, // <-- This line was missing
+        reason: 'Repair completed (no initial report found)',
+        type: 'Repair',
+        fixedDate: new Date(),
+        action: description,
+        fixedBy: req.user._id,
+        cost: cost
+      });
+    }
+
+    // 3. Save changes
+    pool.updateCounts();
+    await pool.save();
+
+    // 4. Update the original 'Maintenance' request status to 'Completed'
+    await Request.findOneAndUpdate(
+      { assignedUniqueId: uniqueId, status: 'Approved', requestType: 'Maintenance' },
+      { status: 'Completed', completedDate: new Date() }
+    );
+
+    res.json({
+      success: true,
+      message: `Item ${uniqueId} is now Available.`,
+      data: { item }
+    });
+
+  } catch (error) {
+    console.error('Complete maintenance error:', error);
+    // ======== 泙 THIS IS THE FIX 泙 ========
+    // Changed the invalid status code to '500'
+    res.status(500).json({
+      success: false,
+      message: 'Server error completing maintenance'
+    });
+    // ===================================
+  }
+});
 
 module.exports = router;

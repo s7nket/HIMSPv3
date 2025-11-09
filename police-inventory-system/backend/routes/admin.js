@@ -1,9 +1,9 @@
 const express =require('express');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
-// const Equipment = require('../models/Equipment'); // 🛑 REMOVED
 const Request = require('../models/Request');
-const EquipmentPool = require('../models/EquipmentPool'); // Import new model
+const EquipmentPool = require('../models/EquipmentPool');
+const OfficerHistory = require('../models/OfficerHistory');
 const { auth } = require('../middleware/auth');
 const { adminOnly } = require('../middleware/roleCheck');
 
@@ -13,8 +13,7 @@ const router = express.Router();
 router.use(auth, adminOnly);
 
 // @route   GET /api/admin/dashboard
-// @desc    Get admin dashboard statistics
-// @access  Private (Admin only)
+// ... (this route is unchanged)
 router.get('/dashboard', async (req, res) => {
   try {
     // User and Request stats
@@ -29,8 +28,7 @@ router.get('/dashboard', async (req, res) => {
       Request.countDocuments({ status: 'Pending' }),
       Request.find({ status: 'Pending' })
         .populate('requestedBy', 'fullName officerId')
-        // .populate('equipmentId', 'name model serialNumber') // 🛑 REMOVED
-        .populate('poolId', 'poolName model') // Added poolId populate
+        .populate('poolId', 'poolName model')
         .sort({ createdAt: -1 })
         .limit(5)
     ]);
@@ -90,8 +88,7 @@ router.get('/dashboard', async (req, res) => {
 });
 
 // @route   GET /api/admin/users
-// @desc    Get all users with pagination
-// @access  Private (Admin only)
+// ... (this route is unchanged)
 router.get('/users', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -147,8 +144,7 @@ router.get('/users', async (req, res) => {
 
 
 // @route POST /api/admin/users
-// @desc Create new user (officer)
-// @access Private (Admin only)
+// ... (this route is unchanged)
 router.post('/users', [
   body('officerId')
     .trim()
@@ -246,8 +242,7 @@ router.post('/users', [
 });
 
 // @route   PUT /api/admin/users/:id
-// @desc    Update user
-// @access  Private (Admin only)
+// ... (this route is unchanged)
 router.put('/users/:id', [
   body('fullName').optional().trim().isLength({ min: 3, max: 100 }),
   body('rank').optional().trim().isLength({ min: 1 }),
@@ -301,9 +296,47 @@ router.put('/users/:id', [
   }
 });
 
+// @route   GET /api/admin/users/:userId/history
+// ... (this route is unchanged)
+router.get('/users/:userId/history', async (req, res) => {
+  try {
+    const officerHistory = await OfficerHistory.findOne({ userId: req.params.userId })
+      .populate('userId', 'fullName officerId designation')
+      .populate('history.issuedBy', 'fullName officerId')
+      .populate('history.returnedTo', 'fullName officerId');
+
+    if (!officerHistory) {
+      const user = await User.findById(req.params.userId).select('fullName officerId designation');
+      return res.json({ 
+        success: true, 
+        data: { 
+          history: [], 
+          officer: user 
+        } 
+      });
+    }
+
+    officerHistory.history.sort((a, b) => new Date(b.requestDate) - new Date(a.requestDate));
+
+    res.json({
+      success: true,
+      data: { 
+        history: officerHistory.history,
+        officer: officerHistory.userId
+      }
+    });
+
+  } catch (error) {
+    console.error('Get user history error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Server error fetching user's equipment history"
+    });
+  }
+});
+
 // @route   GET /api/admin/requests
-// @desc    Get all requests with filters
-// @access  Private (Admin only)
+// ... (this route is unchanged - already fixed to populate 'requestedBy' fully)
 router.get('/requests', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -319,9 +352,8 @@ router.get('/requests', async (req, res) => {
 
     const [requests, total] = await Promise.all([
       Request.find(query)
-        .populate('requestedBy', 'fullName officerId email')
-        // .populate('equipmentId', 'name model serialNumber category') // 🛑 REMOVED
-        .populate('poolId', 'poolName model category') // Added poolId populate
+        .populate('requestedBy')
+        .populate('poolId', 'poolName model category')
         .populate('processedBy', 'fullName officerId')
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -354,98 +386,194 @@ router.get('/requests', async (req, res) => {
 
 // @route   PUT /api/admin/requests/:id/approve
 // @desc    Approve a request
-// @access  Private (Admin only)
 router.put('/requests/:id/approve', [
-  body('notes').optional().isLength({ max: 500 })
+  body('notes').optional().isLength({ max: 500 }),
+  body('condition').optional().isIn(['Excellent', 'Good', 'Fair', 'Poor', 'Out of Service'])
 ], async (req, res) => {
   try {
-    const { notes } = req.body;
+    const { notes, condition } = req.body;
 
     const request = await Request.findById(req.params.id)
-      // .populate('equipmentId') // 🛑 REMOVED
-      .populate('poolId') // New model
+      .populate('poolId')
       .populate('requestedBy');
 
     if (!request) {
-      return res.status(404).json({
-        success: false,
-        message: 'Request not found'
-      });
+      return res.status(404).json({ success: false, message: 'Request not found' });
     }
-
     if (request.status !== 'Pending') {
-      return res.status(400).json({
-        success: false,
-        message: 'Request is not in pending status'
-      });
+      return res.status(400).json({ success: false, message: 'Request is not in pending status' });
     }
 
-    // For issue requests
+    // --- Logic for ISSUE requests ---
     if (request.requestType === 'Issue') {
-      // 🛑 REMOVED: if (request.equipmentId) { ... }
+      const pool = request.poolId;
+      if (!pool) {
+        return res.status(404).json({ success: false, message: 'Equipment pool not found for this request.' });
+      }
       
-      if (request.poolId) {
-        // Logic for equipment pool
-        const pool = request.poolId;
-        
-        pool.updateCounts(); // Ensure counts are fresh
-        if (pool.availableCount === 0) {
-          return res.status(400).json({
-            success: false,
-            message: `No available items in pool: ${pool.poolName}`
-          });
-        }
+      pool.updateCounts();
+      const availableItem = pool.getNextAvailableItem(); // Use the triage function
+      if (!availableItem) {
+        return res.status(400).json({ success: false, message: `No available items in pool (or all are in Poor condition): ${pool.poolName}` });
+      }
 
-        // Issue item from pool
-        const assignedItem = await pool.issueItem(
-          request.requestedBy._id,
-          request.requestedBy.officerId,
-          request.requestedBy.fullName,
-          request.requestedBy.designation,
-          request.reason,
-          req.user._id // Issued by admin
+      // 1. Issue the item from the pool
+      const assignedItem = await pool.issueItem(
+        request.requestedBy._id,
+        request.requestedBy.officerId,
+        request.requestedBy.fullName,
+        request.requestedBy.designation,
+        request.reason,
+        req.user._id // Issued by admin
+      );
+      
+      request.assignedUniqueId = assignedItem.uniqueId;
+
+      // 2. Create the entry in OfficerHistory.js
+      try {
+        const recordId = await generateHistoryRecordId();
+        await OfficerHistory.findOneAndUpdate(
+          { userId: request.requestedBy._id },
+          { 
+            $set: { 
+              officerId: request.requestedBy.officerId, 
+              officerName: request.requestedBy.fullName, 
+              designation: request.requestedBy.designation 
+            },
+            $push: { 
+              history: {
+                recordId: recordId,
+                requestId: request.requestId,
+                requestDate: request.requestedDate,
+                equipmentPoolId: pool._id,
+                equipmentPoolName: pool.poolName,
+                itemUniqueId: assignedItem.uniqueId,
+                category: pool.category,
+                issuedDate: new Date(),
+                issuedBy: req.user._id,
+                purpose: request.reason,
+                conditionAtIssue: assignedItem.condition,
+                status: 'Pending Return'
+              }
+            }
+          },
+          { upsert: true, new: true }
         );
-
-        // Update the request with the assigned item's unique ID for tracking
-        request.assignedUniqueId = assignedItem.uniqueId;
-        await request.save();
-      } else {
-        return res.status(400).json({
-          success: false,
-          message: 'Issue request is invalid (no poolId found)'
-        });
+      } catch (historyError) {
+        console.error('Failed to update officer history:', historyError);
       }
     }
     
-    // For return requests
+    // --- Logic for RETURN requests ---
     if (request.requestType === 'Return') {
-      // 🛑 REMOVED: if (request.equipmentId) { ... }
-
       if (request.poolId && request.assignedUniqueId) {
-        // Logic for equipment pool
         const pool = await EquipmentPool.findById(request.poolId);
         if (!pool) {
            return res.status(404).json({ success: false, message: 'Pool not found for return' });
         }
         
-        const { condition, remarks } = req.body; 
+        const returnCondition = condition || request.condition || 'Good';
 
-        await pool.returnItem(
+        // 1. Return the item to the pool (This updates EquipmentPool.js)
+        const returnedItem = await pool.returnItem(
           request.assignedUniqueId,
-          condition || 'Good', // Default to 'Good' if not provided
-          remarks || notes || 'Returned via admin approval',
-          req.user._id // ReturnedTo (processed by) admin
+          returnCondition,
+          request.reason, // Pass the officer's reason
+          req.user._id
         );
-      } else {
-         return res.status(400).json({
-          success: false,
-          message: 'Return request is invalid (no poolId/uniqueId found)'
+        
+        // 2. Update the entry in OfficerHistory.js
+        try {
+          const latestHistoryEntry = returnedItem.usageHistory[returnedItem.usageHistory.length - 1];
+          await OfficerHistory.updateOne(
+            { "history.itemUniqueId": request.assignedUniqueId, "history.status": "Pending Return" },
+            { 
+              $set: { 
+                "history.$.returnedDate": latestHistoryEntry.returnedDate,
+                "history.$.returnedTo": latestHistoryEntry.returnedTo,
+                "history.$.conditionAtReturn": latestHistoryEntry.conditionAtReturn,
+                "history.$.remarks": latestHistoryEntry.remarks, // This now has the reason
+                "history.$.status": "Completed"
+              }
+            }
+          );
+        } catch (historyError) {
+          console.error('Failed to update officer history on return:', historyError);
+        }
+      }
+    }
+    
+    // --- Logic for MAINTENANCE requests ---
+    if (request.requestType === 'Maintenance') {
+      if (request.poolId && request.assignedUniqueId) {
+        const pool = await EquipmentPool.findById(request.poolId);
+        if (!pool) {
+           return res.status(404).json({ success: false, message: 'Pool not found for this item' });
+        }
+        
+        const item = pool.findItemByUniqueId(request.assignedUniqueId);
+        if (!item) {
+          return res.status(404).json({ success: false, message: 'Item not found in pool' });
+        }
+
+        const maintCondition = request.condition || 'Poor';
+
+        // 1. Find the officer's "Issued" record in usageHistory
+        const lastUsage = item.usageHistory.find(
+          (h) => h.returnedDate === undefined
+        );
+        
+        if (lastUsage) {
+          // 2. "Close out" the officer's record
+          lastUsage.returnedDate = new Date();
+          lastUsage.returnedTo = req.user._id;
+          lastUsage.conditionAtReturn = maintCondition;
+          lastUsage.remarks = `Moved to maintenance: ${request.reason}`;
+        }
+        
+        // 3. Set the item's master status to 'Maintenance'
+        item.status = 'Maintenance';
+        item.condition = maintCondition;
+        
+        // 4. Add the official maintenance log entry
+        item.maintenanceHistory.push({
+          reportedDate: new Date(),
+          reportedBy: lastUsage ? lastUsage.userId : request.requestedBy._id,
+          reason: request.reason, // The officer's reason
+          type: 'Repair',
+          action: 'Awaiting repair...',
+          fixedBy: null
         });
+        
+        // 5. Clear the item from the officer's possession
+        item.currentlyIssuedTo = undefined;
+        
+        pool.updateCounts();
+        await pool.save();
+
+        // 6. Update the OfficerHistory log
+        try {
+          await OfficerHistory.updateOne(
+            { "history.itemUniqueId": request.assignedUniqueId, "history.status": "Pending Return" },
+            { 
+              $set: { 
+                "history.$.status": "Completed", 
+                "history.$.returnedDate": new Date(),
+                "history.$.returnedTo": req.user._id,
+                "history.$.conditionAtReturn": maintCondition,
+                "history.$.remarks": `Moved to maintenance: ${request.reason}`
+              }
+            }
+          );
+        } catch (historyError) {
+          console.error('Failed to update officer history on maintenance:', historyError);
+        }
       }
     }
 
-    // Approve the request
+    // 7. Approve the original request
     await request.approve(req.user._id, notes);
+    await request.save(); 
 
     res.json({
       success: true,
@@ -458,14 +586,12 @@ router.put('/requests/:id/approve', [
     res.status(500).json({
       success: false,
       message: error.message || 'Server error approving request',
-      ...(process.env.NODE_ENV === 'development' && { error: error.message })
     });
   }
 });
 
 // @route   PUT /api/admin/requests/:id/reject
-// @desc    Reject a request
-// @access  Private (Admin only)
+// ... (this route is unchanged)
 router.put('/requests/:id/reject', [
   body('reason').isLength({ min: 1, max: 500 }).withMessage('Reason for rejection is required')
 ], async (req, res) => {
@@ -517,8 +643,7 @@ router.put('/requests/:id/reject', [
 });
 
 // @route   GET /api/admin/reports/summary
-// @desc    Get summary reports
-// @access  Private (Admin only)
+// ... (this route is unchanged)
 router.get('/reports/summary', async (req, res) => {
   try {
     const startDate = new Date(req.query.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
@@ -603,5 +728,37 @@ router.get('/reports/summary', async (req, res) => {
     });
   }
 });
+
+// ... (this helper function is unchanged)
+async function generateHistoryRecordId() {
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+  const prefix = `UH-${dateStr}-`;
+  
+  try {
+    const result = await OfficerHistory.aggregate([
+      { $unwind: '$history' },
+      { $match: { 'history.recordId': { $regex: new RegExp('^' + prefix) } } },
+      { $sort: { 'history.recordId': -1 } },
+      { $limit: 1 },
+      { $project: { _id: 0, 'history.recordId': 1 } }
+    ]);
+
+    let nextSequence = 1;
+    if (result.length > 0) {
+      const lastRecordId = result[0].history.recordId;
+      const lastSeqStr = lastRecordId.split('-')[2];
+      if (lastSeqStr && !isNaN(lastSeqStr)) {
+        nextSequence = parseInt(lastSeqStr, 10) + 1;
+      }
+    }
+    
+    return `${prefix}${nextSequence.toString().padStart(4, '0')}`;
+    
+  } catch (error) {
+    console.error("Error generating history record ID:", error);
+    return `${prefix}${(Math.floor(Math.random() * 9000) + 1000)}`; 
+  }
+}
 
 module.exports = router;

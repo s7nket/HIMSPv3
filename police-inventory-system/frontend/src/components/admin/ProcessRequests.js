@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI } from '../../utils/api'; 
+import { adminAPI } from '../../utils/api';
 import { toast } from 'react-toastify';
 
 const ProcessRequests = () => {
@@ -93,7 +93,7 @@ const ProcessRequests = () => {
               className="form-control"
             >
               <option value="">All Types</option>
-              <option value="Issue">Issue</option> 
+              <option value="Issue">Issue</option>
               <option value="Return">Return</option>
               <option value="Maintenance">Maintenance</option>
             </select>
@@ -111,8 +111,8 @@ const ProcessRequests = () => {
                 <thead>
                   <tr>
                     <th>Request ID</th>
-                    <th>Officer Name</th>
-                    <th>Equipment Name</th>
+                    <th>Officer</th>
+                    <th>Item & Reason</th>
                     <th>Type</th>
                     <th>Priority</th>
                     <th>Date & Time</th>
@@ -125,15 +125,30 @@ const ProcessRequests = () => {
                     <tr key={request._id}>
                       <td>{request.requestId || request._id.slice(-8).toUpperCase()}</td>
                       <td>
-                        {request.requestedBy 
-                          ? request.requestedBy.fullName 
-                          : 'N/A'}
+                        {request.requestedBy ? (
+                          <>
+                            <strong>{request.requestedBy.fullName}</strong>
+                            <br />
+                            <small>{request.requestedBy.designation || 'N/A'}</small>
+                          </>
+                        ) : 'N/A'}
                       </td>
                       <td>
-                        {request.poolId?.poolName || request.poolName || request.equipmentId?.name || 'N/A'}
+                        <strong>
+                          {request.poolId?.poolName || request.poolName || request.equipmentId?.name || 'N/A'}
+                        </strong>
+                        
+                        {/* ======== 🟢 MODIFIED THIS BLOCK 🟢 ======== */}
+                        {/* Always show the reason, as it's required for all request types */}
+                        {request.reason && (
+                          <p className="request-reason" title={request.reason}>
+                            {request.reason}
+                          </p>
+                        )}
+                        {/* ======================================= */}
                       </td>
                       <td>
-                        <span className={`badge badge-${request.requestType === 'Issue' ? 'info' : 'warning'}`}>
+                        <span className={`badge badge-${request.requestType === 'Issue' ? 'info' : (request.requestType === 'Return' ? 'warning' : 'danger')}`}>
                           {request.requestType}
                         </span>
                       </td>
@@ -142,7 +157,6 @@ const ProcessRequests = () => {
                           {request.priority}
                         </span>
                       </td>
-                      {/* ======== 🟢 MODIFIED 🟢 ======== */}
                       <td>{new Date(request.createdAt).toLocaleString()}</td>
                       <td>
                         <span className={`badge badge-${getStatusBadgeClass(request.status)}`}>
@@ -271,7 +285,7 @@ const ApprovalModal = ({ request, onClose, onSuccess }) => {
             />
           </div>
 
-          {request.requestType === 'Return' && (
+          {(request.requestType === 'Return' || request.requestType === 'Maintenance') && (
             <div className="form-group">
               <label className="form-label">Officer Reported Condition</label>
               <select
@@ -286,7 +300,7 @@ const ApprovalModal = ({ request, onClose, onSuccess }) => {
                 <option value="Poor">Poor</option>
                 <option value="Out of Service">Out of Service</option>
               </select>
-              <small>Confirm the condition before approving the return.</small>
+              <small>Confirm the condition before approving.</small>
             </div>
           )}
 

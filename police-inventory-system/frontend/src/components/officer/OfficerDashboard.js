@@ -3,6 +3,8 @@ import Navigation from '../common/Navigation';
 import RequestEquipment from './RequestEquipment';
 import ViewInventory from './ViewInventory';
 import ReturnEquipment from './ReturnEquipment';
+// import MyRequests from './MyRequests'; // 🛑 REMOVED THIS LINE - This was the error
+import MyHistory from './MyHistory'; // 🟢 This import is correct
 import { officerAPI } from '../../utils/api';
 import { toast } from 'react-toastify';
 import './OfficerDashboard.css';
@@ -17,7 +19,8 @@ const OfficerDashboard = () => {
     'requestEquipment',
     'viewInventory',
     'returnEquipment',
-    'myRequests'
+    'myRequests',
+    'myHistory' // 🟢 This is correct
   ];
 
   useEffect(() => {
@@ -62,6 +65,8 @@ const OfficerDashboard = () => {
         return <ReturnEquipment onEquipmentReturned={fetchDashboardData} />;
       case 'myRequests':
         return <MyRequests />;
+      case 'myHistory':
+        return <MyHistory />;
       default:
         return <OfficerDashboardStats stats={dashboardData?.stats} recentActivity={dashboardData?.recentActivity} />;
     }
@@ -127,7 +132,6 @@ const OfficerDashboardStats = ({ stats, recentActivity }) => {
                     {request.poolId?.poolName || 'Request'}
                   </div>
                   <div className="activity-meta">
-                    {/* ======== 🟢 MODIFIED 🟢 ======== */}
                     {request.requestType} • {new Date(request.createdAt).toLocaleString()}
                   </div>
                 </div>
@@ -145,6 +149,7 @@ const OfficerDashboardStats = ({ stats, recentActivity }) => {
   );
 };
 
+// This component is correctly defined here
 const MyRequests = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -227,7 +232,6 @@ const MyRequests = () => {
                   <div className="request-details">
                     <h4>{request.poolId?.poolName || 'Equipment Request'}</h4>
                     <p className="request-meta">
-                      {/* ======== 🟢 MODIFIED 🟢 ======== */}
                       {request.poolId?.model} • {request.requestType} • {new Date(request.createdAt).toLocaleString()}
                     </p>
                     <p className="request-reason">{request.reason}</p>
@@ -283,8 +287,6 @@ const MyRequests = () => {
   );
 };
 
-// ... (StatCard, formatSectionTitle, CancelConfirmationModal are unchanged) ...
-
 const StatCard = ({ icon, title, value, subtitle, color, urgent }) => (
   <div className={`stat-card ${color} ${urgent ? 'urgent' : ''}`}>
     <div className="stat-icon">{icon}</div>
@@ -302,7 +304,8 @@ const formatSectionTitle = (section) => {
     requestEquipment: 'Request Equipment',
     viewInventory: 'Equipment Inventory',
     returnEquipment: 'Return Equipment',
-    myRequests: 'My Requests'
+    myRequests: 'My Requests',
+    myHistory: 'My Equipment History' // 🟢 This is correct
   };
   return titles[section] || section;
 };

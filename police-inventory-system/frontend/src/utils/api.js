@@ -220,10 +220,6 @@ export const officerAPI = {
 // ============================================
 
 export const equipmentAPI = {
-  // ... existing equipment methods ...
-
-  // ========== EQUIPMENT POOL METHODS ==========
-
   // Get all equipment pools
   getEquipmentPools: (params) => {
     console.log('🔄 GET /equipment/pools', params);
@@ -284,6 +280,12 @@ export const equipmentAPI = {
   deleteEquipmentPool: (poolId) => {
     console.log(`🔄 DELETE /equipment/pools/${poolId}`);
     return api.delete(`/equipment/pools/${poolId}`); // <-- CORRECT
+  },
+  
+  // This calls the 'complete-maintenance' route you already have
+  completeMaintenance: (data) => {
+    console.log('🔄 POST /equipment/pools/complete-maintenance', data);
+    return api.post('/equipment/pools/complete-maintenance', data);
   }
 };
 

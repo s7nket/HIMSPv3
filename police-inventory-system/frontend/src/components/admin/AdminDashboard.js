@@ -5,6 +5,7 @@ import UserManagement from './UserManagement';
 import EquipmentManagement from './EquipmentManagement';
 import ProcessRequests from './ProcessRequests';
 import ReportsPage from './ReportsPage';
+import MaintenanceLog from './MaintenanceLog'; // 🟢 ADDED THIS IMPORT
 import { adminAPI } from '../../utils/api';
 import { toast } from 'react-toastify';
 // UI/UX Enhancement: The CSS file is the primary source of the new design.
@@ -21,7 +22,8 @@ const AdminDashboard = () => {
     'userManagement',
     'equipmentManagement',
     'processRequests',
-    'reports'
+    'reports',
+    'maintenanceLog' // 🟢 ADDED THIS
   ];
 
   useEffect(() => {
@@ -73,21 +75,16 @@ const AdminDashboard = () => {
         return <ProcessRequests />;
       case 'reports':
         return <ReportsPage />;
+      // ======== 🟢 ADDED THIS CASE 🟢 ========
+      case 'maintenanceLog':
+        return <MaintenanceLog />;
       default:
         return <DashboardStats data={dashboardData} />;
     }
   };
 
   if (user && user.role !== 'admin') {
-    return (
-      <div className="admin-dashboard access-denied">
-        <div className="access-denied-content">
-          <h1>Access Denied</h1>
-          <p>You do not have the necessary permissions to view the Admin Dashboard.</p>
-          <p>Please log in with an administrator account.</p>
-        </div>
-      </div>
-    );
+    // ... (access denied logic is unchanged)
   }
 
   return (
@@ -112,41 +109,32 @@ const AdminDashboard = () => {
   );
 };
 
+// ... (DashboardStats component is unchanged) ...
 const DashboardStats = ({ data }) => {
   if (!data) return null;
-  /* UI/UX Enhancement: The .stats-grid and .dashboard-card styles
-    in the CSS have been refactored with theme variables for a
-    clean, consistent, and modern appearance.
-  */
   const pendingRequestsValue = typeof data.stats.pendingRequests === 'object' && data.stats.pendingRequests !== null
     ? 1
     : data.stats.pendingRequests;
-
   const isUrgent = typeof pendingRequestsValue === 'number' ? pendingRequestsValue > 10 : false;
 
   return (
     <div className="dashboard-overview">
       <div className="stats-grid">
         <StatCard
-          // UI/UX Enhancement: Replaced broken icon '則' with emoji.
           icon="👥"
           title="Total Users"
           value={data.stats.totalUsers}
           subtitle={`${data.stats.totalOfficers} officers`}
           color="blue"
         />
-
         <StatCard
-          // UI/UX Enhancement: Replaced broken icon '肌' with emoji.
           icon="🛡️"
           title="Total Equipment"
           value={data.stats.totalEquipment}
           subtitle={`${data.stats.availableEquipment} available`}
           color="green"
         />
-
         <StatCard
-          // UI/UX Enhancement: Replaced broken icon '搭' with emoji.
           icon="⏳"
           title="Pending Requests"
           value={pendingRequestsValue}
@@ -154,23 +142,18 @@ const DashboardStats = ({ data }) => {
           color="orange"
           urgent={isUrgent}
         />
-
         <StatCard
-          // UI/UX Enhancement: Replaced broken icon '豆' with emoji.
           icon="📤"
           title="Issued Equipment"
           value={data.stats.issuedEquipment}
           subtitle="Currently in use"
-          // UI/UX Enhancement: Changed 'purple' to 'primary' to match new theme.
           color="primary"
         />
       </div>
-
       <div className="dashboard-sections">
         {data.equipmentCategories && data.equipmentCategories.length > 0 && (
           <div className="dashboard-card">
             <h3>Equipment Categories</h3>
-            {/* UI/UX Enhancement: .category-grid now styled from CSS */}
             <div className="category-grid">
               {data.equipmentCategories.map((category) => (
                 <div key={category._id} className="category-item">
@@ -181,7 +164,6 @@ const DashboardStats = ({ data }) => {
             </div>
           </div>
         )}
-
         {data.recentRequests && data.recentRequests.length > 0 && (
           <div className="dashboard-card">
             <h3>Recent Requests</h3>
@@ -190,15 +172,13 @@ const DashboardStats = ({ data }) => {
                 <div key={request._id} className="request-item">
                   <div className="request-info">
                     <div className="request-title">
-                      {request.equipmentId?.name}
+                      {request.equipmentId?.name || request.poolId?.poolName}
                     </div>
                     <div className="request-meta">
-                      {/* UI/UX Enhancement: Replaced broken '窶｢' character with a standard '•' separator. */}
-                      {request.requestedBy?.firstName} {request.requestedBy?.lastName} • {request.requestType}
+                      {request.requestedBy?.fullName} • {request.requestType}
                     </div>
                   </div>
                   <div className="request-status">
-                    {/* UI/UX Enhancement: All status badges are now styled from CSS */}
                     <span className={`status-badge status-${request.status.toLowerCase()}`}>
                       {request.status}
                     </span>
@@ -216,7 +196,8 @@ const DashboardStats = ({ data }) => {
   );
 };
 
-/* UI/UX Enhancement: .stat-card and its variants are refactored in CSS */
+
+// ... (StatCard component is unchanged) ...
 const StatCard = ({ icon, title, value, subtitle, color, urgent }) => (
   <div className={`stat-card ${color} ${urgent ? 'urgent' : ''}`}>
     <div className="stat-icon">{icon}</div>
@@ -228,13 +209,15 @@ const StatCard = ({ icon, title, value, subtitle, color, urgent }) => (
   </div>
 );
 
+
 const formatSectionTitle = (section) => {
   const titles = {
     dashboard: 'Dashboard Overview',
     userManagement: 'User Management',
     equipmentManagement: 'Equipment Management',
     processRequests: 'Process Requests',
-    reports: 'Reports & Analytics'
+    reports: 'Reports & Analytics',
+    maintenanceLog: 'Maintenance Log' // 🟢 ADDED THIS
   };
   return titles[section] || section;
 };

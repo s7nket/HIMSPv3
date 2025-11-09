@@ -4,6 +4,7 @@ const Request = require('../models/Request');
 const { auth } = require('../middleware/auth');
 const { officerOnly, adminOrOfficer } = require('../middleware/roleCheck');
 const EquipmentPool = require('../models/EquipmentPool');
+const OfficerHistory = require('../models/OfficerHistory')
 const mongoose = require('mongoose');
 
 const router = express.Router();
@@ -544,6 +545,38 @@ router.get('/my-requests', officerOnly, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error fetching your requests'
+    });
+  }
+});
+
+// @route   GET /api/officer/my-history
+// @desc    Get the full usage history for the logged-in officer
+// @access  Private (Officer only)
+router.get('/my-history', officerOnly, async (req, res) => {
+  try {
+    // This is the fast query using your new model
+    const officerHistory = await OfficerHistory.findOne({ userId: req.user._id })
+      .populate('history.issuedBy', 'fullName officerId')
+      .populate('history.returnedTo', 'fullName officerId');
+
+    if (!officerHistory) {
+      // If they have no history yet, return an empty array
+      return res.json({ success: true, data: { history: [] } });
+    }
+
+    // Sort the history array by the most recent request date
+    officerHistory.history.sort((a, b) => new Date(b.requestDate) - new Date(a.requestDate));
+
+    res.json({
+      success: true,
+      data: { history: officerHistory.history }
+    });
+
+  } catch (error) {
+    console.error('Get my-history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching equipment history'
     });
   }
 });

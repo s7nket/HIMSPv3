@@ -5,11 +5,11 @@ import { toast } from 'react-toastify';
 // A simple helper to format dates
 const formatDateTime = (dateString) => {
   if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleString();
+  return new Date(dateString).toLocaleString('en-IN');
 };
 
 const ItemHistoryModal = ({ poolId, uniqueId, onClose }) => {
-  const [history, setHistory] = useState(null);
+  const [history, setHistory] = useState(null); 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,7 +18,7 @@ const ItemHistoryModal = ({ poolId, uniqueId, onClose }) => {
         setLoading(true);
         const response = await equipmentAPI.getItemHistory(poolId, uniqueId);
         if (response.data.success) {
-          setHistory(response.data.data);
+          setHistory(response.data.data); 
         } else {
           toast.error(response.data.message);
         }
@@ -34,6 +34,7 @@ const ItemHistoryModal = ({ poolId, uniqueId, onClose }) => {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
+      {/* 🟢 Make modal wider */}
       <div className="modal-content equipment-details-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>History for Item: {uniqueId}</h3>
@@ -61,57 +62,85 @@ const ItemHistoryModal = ({ poolId, uniqueId, onClose }) => {
                 </div>
               </div>
 
+              {/* ======== 🟢 USAGE HISTORY TABLE (MODIFIED) 🟢 ======== */}
               <div className="detail-section">
                 <h4>Usage History</h4>
                 {history.usageHistory.length === 0 ? (
-                  <p>No usage history for this item.</p>
+                  <p>No usage history found for this item. (Brand New)</p>
                 ) : (
-                  <table className="table table-sm">
-                    <thead>
-                      <tr>
-                        <th>Officer</th>
-                        <th>Issued</th>
-                        <th>Returned</th>
-                        <th>Condition (Return)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {history.usageHistory.map(entry => (
-                        <tr key={entry._id}>
-                          <td>{entry.officerName}</td>
-                          <td>{formatDateTime(entry.issuedDate)}</td>
-                          <td>{formatDateTime(entry.returnedDate)}</td>
-                          <td>{entry.conditionAtReturn || 'N/A'}</td>
+                  <div className="inventory-table">
+                    <table className="table table-sm">
+                      <thead>
+                        <tr>
+                          <th>Officer</th>
+                          <th>Issued</th>
+                          <th>Reason (Issue)</th>
+                          <th>Returned</th>
+                          <th>Reason (Return)</th>
+                          <th>Condition (Return)</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {history.usageHistory.map(entry => (
+                          <tr key={entry._id}>
+                            <td>{entry.officerName}</td>
+                            <td>{formatDateTime(entry.issuedDate)}</td>
+                            <td title={entry.purpose}>{entry.purpose || 'N/A'}</td>
+                            <td>
+                              {entry.returnedDate 
+                                ? formatDateTime(entry.returnedDate) 
+                                : <span className="badge badge-warning">Still Issued</span>
+                              }
+                            </td>
+                            <td title={entry.remarks}>{entry.remarks || 'N/A'}</td>
+                            <td>
+                              {entry.conditionAtReturn 
+                                ? <span className={`badge badge-${entry.conditionAtReturn === 'Good' || entry.conditionAtReturn === 'Excellent' ? 'success' : 'danger'}`}>
+                                    {entry.conditionAtReturn}
+                                  </span>
+                                : 'N/A'
+                              }
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
               
+              {/* ======== 🟢 MAINTENANCE HISTORY TABLE (MODIFIED) 🟢 ======== */}
               <div className="detail-section">
                 <h4>Maintenance History</h4>
                 {history.maintenanceHistory.length === 0 ? (
                   <p>No maintenance history for this item.</p>
                 ) : (
-                  <table className="table table-sm">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {history.maintenanceHistory.map(entry => (
-                        <tr key={entry._id}>
-                          <td>{new Date(entry.date).toLocaleDateString()}</td>
-                          <td>{entry.type}</td>
-                          <td>{entry.description}</td>
+                  <div className="inventory-table">
+                    <table className="table table-sm">
+                      <thead>
+                        <tr>
+                          <th>Date Reported</th>
+                          <th>Reported By</th>
+                          <th>Problem Reported</th>
+                          <th>Date Fixed</th>
+                          <th>Action Taken</th>
+                          <th>Armorer</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {history.maintenanceHistory.map(entry => (
+                          <tr key={entry._id}>
+                            <td>{formatDateTime(entry.reportedDate)}</td>
+                            <td>{entry.reportedBy?.fullName || 'N/A'}</td>
+                            <td title={entry.reason}>{entry.reason}</td>
+                            <td>{entry.fixedDate ? formatDateTime(entry.fixedDate) : 'Pending'}</td>
+                            <td>{entry.action}</td>
+                            <td>{entry.fixedBy?.fullName || 'N/A'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </>
