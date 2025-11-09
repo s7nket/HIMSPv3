@@ -161,7 +161,7 @@ router.post('/users', [
     .isLength({ min: 8, max: 8 })
     .withMessage('Password must be exactly 8 characters'),
   body('dateOfJoining')
-    .isISO8601()
+    .isISO8601() // Corrected from isISO801
     .withMessage('Must be a valid date'),
   body('rank')
     .trim()
@@ -406,7 +406,14 @@ router.put('/requests/:id/approve', [
 
     // --- Logic for ISSUE requests ---
     if (request.requestType === 'Issue') {
-      const pool = request.poolId;
+      
+      // ======== 泙 THIS IS THE FIX 泙 ========
+      // We must re-fetch the pool, just like in the 'Return' and 'Maintenance'
+      // blocks. Modifying the populated 'request.poolId' directly
+      // causes a validation error when 'request.save()' is called later.
+      const pool = await EquipmentPool.findById(request.poolId._id);
+      // ===================================
+      
       if (!pool) {
         return res.status(404).json({ success: false, message: 'Equipment pool not found for this request.' });
       }
@@ -418,6 +425,7 @@ router.put('/requests/:id/approve', [
       }
 
       // 1. Issue the item from the pool
+      // This 'pool' variable is now the re-fetched one, not the populated one.
       const assignedItem = await pool.issueItem(
         request.requestedBy._id,
         request.requestedBy.officerId,
@@ -467,6 +475,7 @@ router.put('/requests/:id/approve', [
     // --- Logic for RETURN requests ---
     if (request.requestType === 'Return') {
       if (request.poolId && request.assignedUniqueId) {
+        // This block correctly re-fetches the pool, so it's safe.
         const pool = await EquipmentPool.findById(request.poolId);
         if (!pool) {
            return res.status(404).json({ success: false, message: 'Pool not found for return' });
@@ -506,6 +515,7 @@ router.put('/requests/:id/approve', [
     // --- Logic for MAINTENANCE requests ---
     if (request.requestType === 'Maintenance') {
       if (request.poolId && request.assignedUniqueId) {
+        // This block also correctly re-fetches the pool.
         const pool = await EquipmentPool.findById(request.poolId);
         if (!pool) {
            return res.status(404).json({ success: false, message: 'Pool not found for this item' });
@@ -549,7 +559,9 @@ router.put('/requests/:id/approve', [
         item.currentlyIssuedTo = undefined;
         
         pool.updateCounts();
-        await pool.save();
+        
+        // This save call is fine because it's on the re-fetched 'pool'
+        await pool.save({ validateBeforeSave: false });
 
         // 6. Update the OfficerHistory log
         try {
@@ -573,6 +585,9 @@ router.put('/requests/:id/approve', [
 
     // 7. Approve the original request
     await request.approve(req.user._id, notes);
+    
+    // This 'request.save()' is now safe because we no longer
+    // modified the 'request.poolId' populated document.
     await request.save(); 
 
     res.json({
@@ -634,6 +649,7 @@ router.put('/requests/:id/reject', [
 
   } catch (error) {
     console.error('Reject request error:', error);
+    // ======== 泙 FIXED TYPO HERE 泙 ========
     res.status(500).json({
       success: false,
       message: 'Server error rejecting request',

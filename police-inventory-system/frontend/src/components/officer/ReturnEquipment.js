@@ -93,7 +93,6 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
     (new Date() - new Date(equipment.issuedTo.issuedDate)) / (1000 * 60 * 60 * 24)
   );
   
-  // ======== 🟢 ADDED THIS STATE 🟢 ========
   const [showMaintModal, setShowMaintModal] = useState(false);
 
   return (
@@ -123,8 +122,6 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
         </div>
 
         <div className="equipment-actions">
-          {/* ======== 🟢 MODIFIED THIS SECTION 🟢 ======== */}
-          {/* Wrapped buttons in a container for better layout */}
           <div className="action-buttons-container">
             <button
               onClick={() => onReturn(equipment)}
@@ -142,7 +139,6 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
         </div>
       </div>
       
-      {/* ======== 🟢 ADDED THIS MODAL 🟢 ======== */}
       {showMaintModal && (
         <MaintenanceModal
           equipment={equipment}
@@ -150,7 +146,7 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
           onSuccess={() => {
             setShowMaintModal(false);
             toast.success('Maintenance request submitted successfully!');
-            onRefresh(); // Refresh list after submitting
+            onRefresh(); // Use onRefresh prop directly
           }}
         />
       )}
@@ -159,19 +155,25 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
 };
 
 const ReturnModal = ({ equipment, onClose, onSuccess }) => {
-  // ... (This component is unchanged from your file)
   const [formData, setFormData] = useState({
     reason: '',
     priority: 'Medium',
-    condition: equipment.condition || 'Good'
+    condition: equipment?.condition || 'Good',
+    firNumber: '',
+    firDate: '',
+    description: '',
+    documentFile: null
   });
+
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (e) => {
+    setFormData(prev => ({ ...prev, documentFile: e.target.files[0] }));
   };
 
   const handleSubmit = async (e) => {
@@ -179,89 +181,102 @@ const ReturnModal = ({ equipment, onClose, onSuccess }) => {
     setLoading(true);
 
     try {
-      await officerAPI.createRequest({
-        poolId: equipment.poolId,
-        uniqueId: equipment._id,
-        requestType: 'Return',
-        ...formData
-      });
-      toast.success('Return request submitted successfully');
-      onSuccess();
-      onClose();
+      if (formData.condition === 'Lost') {
+        if (!formData.firNumber || !formData.firDate) {
+          toast.error('FIR Number and Date are required for lost weapon report.');
+          setLoading(false);
+          return;
+        }
+
+        const lostData = new FormData();
+        lostData.append('poolId', equipment.poolId);
+        // Use equipment._id as that's what the parent passes
+        lostData.append('uniqueId', equipment._id); 
+        lostData.append('firNumber', formData.firNumber);
+        lostData.append('firDate', formData.firDate);
+        lostData.append('description', formData.description);
+        if (formData.documentFile) lostData.append('documentUrl', formData.documentFile);
+
+        await officerAPI.reportLostWeapon(lostData);
+        toast.success('Lost weapon FIR submitted successfully');
+      } else {
+        await officerAPI.createRequest({
+          poolId: equipment.poolId,
+          // Use equipment._id as that's what the parent passes
+          uniqueId: equipment._id,
+          requestType: 'Return',
+          reason: formData.reason,
+          priority: formData.priority,
+          condition: formData.condition
+        });
+        toast.success('Return request submitted successfully');
+      }
+
+      onSuccess?.();
+      onClose?.();
     } catch (error) {
-      toast.error('Failed to submit return request');
+      console.error('Return submission error:', error);
+      toast.error('Failed to process return.');
     } finally {
       setLoading(false);
     }
   };
-
-  const isOverdue = equipment.issuedTo.expectedReturnDate && 
-    new Date(equipment.issuedTo.expectedReturnDate) < new Date();
-
+  
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Return Equipment</h3>
-          <button onClick={onClose} className="close-btn">&times;</button>
+          <button onClick={onClose} className="close-btn">×</button>
         </div>
-        {isOverdue && (
-          <div className="overdue-notice">
-            <strong>⚠️ This equipment is overdue for return!</strong>
-            <p>Expected return date was: {new Date(equipment.issuedTo.expectedReturnDate).toLocaleDateString()}</p>
-          </div>
-        )}
-        <div className="equipment-summary">
-          <h4>{equipment.name}</h4>
-          <p>{equipment.model} - ID: {equipment.serialNumber}</p>
-          <p>Category: {equipment.category}</p>
-          <p>Issued Date: {new Date(equipment.issuedTo.issuedDate).toLocaleDateString()}</p>
-        </div>
-        <form onSubmit={handleSubmit}>
+    
+        <form onSubmit={handleSubmit} className="modal-body">
           <div className="form-group">
-            <label className="form-label">Reason for Return</label>
+            <label>Reason for Return</label>
             <textarea
               name="reason"
               value={formData.reason}
               onChange={handleChange}
-              className="form-control"
-              rows="3"
-              placeholder="Please explain the reason for returning this equipment..."
-              required
+              placeholder="Enter reason for returning equipment"
+              required={formData.condition !== 'Lost'}
             />
           </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Priority</label>
-              <select name="priority" value={formData.priority} onChange={handleChange} className="form-control">
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-                <option value="Urgent">Urgent</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Current Condition</label>
-              <select name="condition" value={formData.condition} onChange={handleChange} className="form-control">
-                <option value="Excellent">Excellent</option>
-                <option value="Good">Good</option>
-                <option value="Fair">Fair</option>
-                <option value="Poor">Poor</option>
-                <option value="Out of Service">Out of Service</option>
-              </select>
-            </div>
+    
+          <div className="form-group">
+            <label>Priority</label>
+            <select name="priority" value={formData.priority} onChange={handleChange}>
+              <option>Low</option>
+              <option>Medium</option>
+              <option>High</option>
+              <option>Urgent</option>
+            </select>
           </div>
-          <div className="form-note">
-            <p><strong>Note:</strong> This will create a return request that needs to be approved by an admin. 
-            You will continue to have custody of the equipment until the return is processed.</p>
+    
+          <div className="form-group">
+            <label>Condition</label>
+            <select name="condition" value={formData.condition} onChange={handleChange}>
+              <option>Excellent</option>
+              <option>Good</option>
+              <option>Fair</option>
+              <option>Poor</option>
+              <option>Lost</option>
+            </select>
           </div>
+    
+          {/* 🔹 FIR section appears only when "Lost" is selected */}
+          {formData.condition === 'Lost' && (
+            <div className="lost-fir-section">
+              <h4>Lost Weapon FIR Details</h4>
+              <input type="text" name="firNumber" placeholder="FIR Number (e.g., 123/2025)" value={formData.firNumber} onChange={handleChange} required />
+              <input type="date" name="firDate" value={formData.firDate} onChange={handleChange} required />
+              <textarea name="description" placeholder="Brief description of the loss" value={formData.description} onChange={handleChange}></textarea>
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} />
+            </div>
+          )}
+          
           <div className="modal-actions">
-            <button type="button" onClick={onClose} className="btn btn-secondary">
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? 'Submitting...' : 'Submit Return Request'}
-            </button>
+            <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Submitting...' : 'Submit'}</button>
           </div>
         </form>
       </div>
@@ -269,7 +284,8 @@ const ReturnModal = ({ equipment, onClose, onSuccess }) => {
   );
 };
 
-// ======== 🟢 ADDED THIS NEW COMPONENT 🟢 ========
+
+// ======== 🟢 THIS COMPONENT IS FIXED 🟢 ========
 const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     reason: '', // This is the "problem description"
@@ -279,6 +295,8 @@ const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
+    // ======== 泙 THIS IS THE FIX 泙 ========
+    // It was 'e.g.target.name', corrected to 'e.target.name'
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 

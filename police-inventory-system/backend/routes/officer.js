@@ -581,4 +581,57 @@ router.get('/my-history', officerOnly, async (req, res) => {
   }
 });
 
+// @route POST /api/officer/report-lost
+// @desc Report a lost weapon and submit FIR
+// @access Private (Officer only)
+router.post('/report-lost', officerOnly, [
+  body('poolId').isMongoId().withMessage('Valid pool ID is required'),
+  body('uniqueId').notEmpty().withMessage('Item unique ID is required'),
+  body('firNumber').notEmpty().withMessage('FIR number is required'),
+  body('firDate').isISO8601().withMessage('Valid FIR date required'),
+  body('description').optional().isString()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: 'Validation errors', errors: errors.array() });
+    }
+
+    const { poolId, uniqueId, firNumber, firDate, description, documentUrl } = req.body;
+
+    const pool = await EquipmentPool.findById(poolId);
+    if (!pool) return res.status(404).json({ success: false, message: 'Equipment pool not found' });
+
+    const item = pool.items.find(i => i.uniqueId === uniqueId);
+    if (!item) return res.status(404).json({ success: false, message: 'Item not found in pool' });
+
+    if (item.status !== 'Issued' || !item.currentlyIssuedTo?.userId.equals(req.user._id)) {
+      return res.status(400).json({ success: false, message: 'You can only report a lost weapon that is issued to you.' });
+    }
+
+    item.status = 'Lost';
+    item.lostHistory.push({
+      reportedBy: req.user._id,
+      firNumber,
+      firDate,
+      description,
+      documentUrl
+    });
+
+    await pool.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'FIR submitted and weapon marked as lost',
+      data: { uniqueId, firNumber }
+    });
+  } catch (error) {
+    console.error('Report lost weapon error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error reporting lost weapon'
+    });
+  }
+});
+
 module.exports = router;

@@ -194,6 +194,41 @@ const EquipmentLedger = () => {
               </div>
             )}
           </div>
+          <div className="dashboard-card">
+            <h4>Lost Weapons FIR History for {historyData.uniqueId}</h4>
+            {historyData.lostHistory?.length ? (
+              <div className="inventory-table">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>FIR Number</th>
+                      <th>Police Station</th>
+                      <th>FIR Date</th>
+                      <th>Description</th>
+                      <th>Filed By</th>
+                      <th>Document</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyData.lostHistory.map((fir) => (
+                      <tr key={fir._id}>
+                        <td>{fir.firNumber}</td>
+                        <td>{fir.policeStation}</td>
+                        <td>{new Date(fir.firDate).toLocaleDateString()}</td>
+                        <td>{fir.description || 'N/A'}</td>
+                        <td>{fir.reportedBy?.fullName || 'Unknown'}</td>
+                        <td>{fir.documentUrl ? <a href={fir.documentUrl} target="_blank" rel="noopener noreferrer">View</a> : 'No File'}</td>
+                        <td>{fir.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p>No FIR records found for this item.</p>
+            )}
+          </div>
         </div>
       )}
     </div>
