@@ -100,11 +100,11 @@ router.get('/users', async (req, res) => {
     const query = {
       ...(search && {
         $or: [
-          { firstName: { $regex: search, $options: 'i' } },
-          { lastName: { $regex: search, $options: 'i' } },
-          { username: { $regex: search, $options: 'i' } },
+          // 🟡 FIXED: Use 'fullName' to match schema, not firstName/lastName
+          { fullName: { $regex: search, $options: 'i' } },
+          { officerId: { $regex: search, $options: 'i' } },
           { email: { $regex: search, $options: 'i' } },
-          { badgeNumber: { $regex: search, $options: 'i' } }
+          { designation: { $regex: search, $options: 'i' } }
         ]
       }),
       ...(role && { role })
@@ -296,6 +296,66 @@ router.put('/users/:id', [
   }
 });
 
+// ======== 🟢 ADD THIS ENTIRE ROUTE 🟢 ========
+// @route   DELETE /api/admin/users/:id
+// @desc    Delete a user permanently
+// @access  AdminOnly
+router.delete('/users/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    // Safety check: Do not allow deletion of the last admin
+    if (user.role === 'admin') {
+      const adminCount = await User.countDocuments({ role: 'admin', isActive: true });
+      if (adminCount <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cannot delete the last active admin account.'
+        });
+      }
+    }
+
+    // Safety check: Do not allow deletion if user has equipment issued
+    const issuedItems = await EquipmentPool.find({
+      'items.currentlyIssuedTo.userId': req.params.id
+    });
+
+    if (issuedItems.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete user. They currently have equipment issued. Please ensure all items are returned first.'
+      });
+    }
+    
+    // Proceed with deletion
+    await User.findByIdAndDelete(req.params.id);
+
+    // Also remove their equipment history log
+    await OfficerHistory.deleteOne({ userId: req.params.id });
+
+    res.json({
+      success: true,
+      message: 'User permanently deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error deleting user',
+      ...(process.env.NODE_ENV === 'development' && { error: error.message })
+    });
+  }
+});
+// ===============================================
+
 // @route   GET /api/admin/users/:userId/history
 // ... (this route is unchanged)
 router.get('/users/:userId/history', async (req, res) => {
@@ -336,7 +396,7 @@ router.get('/users/:userId/history', async (req, res) => {
 });
 
 // @route   GET /api/admin/requests
-// ... (this route is unchanged - already fixed to populate 'requestedBy' fully)
+// ... (this route is unchanged)
 router.get('/requests', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -385,7 +445,7 @@ router.get('/requests', async (req, res) => {
 });
 
 // @route   PUT /api/admin/requests/:id/approve
-// @desc    Approve a request
+// ... (this route is unchanged)
 router.put('/requests/:id/approve', [
   body('notes').optional().isLength({ max: 500 }),
   body('condition').optional().isIn(['Excellent', 'Good', 'Fair', 'Poor', 'Out of Service'])
@@ -407,12 +467,7 @@ router.put('/requests/:id/approve', [
     // --- Logic for ISSUE requests ---
     if (request.requestType === 'Issue') {
       
-      // ======== 泙 THIS IS THE FIX 泙 ========
-      // We must re-fetch the pool, just like in the 'Return' and 'Maintenance'
-      // blocks. Modifying the populated 'request.poolId' directly
-      // causes a validation error when 'request.save()' is called later.
       const pool = await EquipmentPool.findById(request.poolId._id);
-      // ===================================
       
       if (!pool) {
         return res.status(404).json({ success: false, message: 'Equipment pool not found for this request.' });
@@ -425,7 +480,6 @@ router.put('/requests/:id/approve', [
       }
 
       // 1. Issue the item from the pool
-      // This 'pool' variable is now the re-fetched one, not the populated one.
       const assignedItem = await pool.issueItem(
         request.requestedBy._id,
         request.requestedBy.officerId,
@@ -475,7 +529,6 @@ router.put('/requests/:id/approve', [
     // --- Logic for RETURN requests ---
     if (request.requestType === 'Return') {
       if (request.poolId && request.assignedUniqueId) {
-        // This block correctly re-fetches the pool, so it's safe.
         const pool = await EquipmentPool.findById(request.poolId);
         if (!pool) {
            return res.status(404).json({ success: false, message: 'Pool not found for return' });
@@ -515,7 +568,6 @@ router.put('/requests/:id/approve', [
     // --- Logic for MAINTENANCE requests ---
     if (request.requestType === 'Maintenance') {
       if (request.poolId && request.assignedUniqueId) {
-        // This block also correctly re-fetches the pool.
         const pool = await EquipmentPool.findById(request.poolId);
         if (!pool) {
            return res.status(404).json({ success: false, message: 'Pool not found for this item' });
@@ -560,7 +612,6 @@ router.put('/requests/:id/approve', [
         
         pool.updateCounts();
         
-        // This save call is fine because it's on the re-fetched 'pool'
         await pool.save({ validateBeforeSave: false });
 
         // 6. Update the OfficerHistory log
@@ -583,7 +634,6 @@ router.put('/requests/:id/approve', [
       }
     }
 
-    // ======== 🟢 ADD THIS ENTIRE BLOCK 🟢 ========
     // --- Logic for LOST requests ---
     if (request.requestType === 'Lost') {
       if (request.poolId && request.assignedUniqueId) {
@@ -617,23 +667,19 @@ router.put('/requests/:id/approve', [
         item.condition = 'Out of Service'; // This is a fitting condition
         
         // 3. Add the official 'lostHistory' log entry
-        // 3. Add the official 'lostHistory' log entry
-        // 3. Add the official 'lostHistory' log entry
-item.lostHistory.push({
-  reportedDate: new Date(),
-  reportedBy: request.requestedBy._id,
-  firNumber: request.firNumber,
-  firDate: request.firDate,
-  description: request.reason, // Officer's description of loss
-  status: 'Under Investigation',
-
-  // --- 🟢 ADD ALL THESE MISSING FIELDS ---
-  policeStation: request.policeStation,
-  dateOfLoss: request.dateOfLoss,
-  placeOfLoss: request.placeOfLoss,
-  dutyAtTimeOfLoss: request.dutyAtTimeOfLoss,
-  remedialActionTaken: request.remedialActionTaken
-});
+        item.lostHistory.push({
+          reportedDate: new Date(),
+          reportedBy: request.requestedBy._id,
+          firNumber: request.firNumber,
+          firDate: request.firDate,
+          description: request.reason, // Officer's description of loss
+          status: 'Under Investigation',
+          policeStation: request.policeStation,
+          dateOfLoss: request.dateOfLoss,
+          placeOfLoss: request.placeOfLoss,
+          dutyAtTimeOfLoss: request.dutyAtTimeOfLoss,
+          remedialActionTaken: request.remedialActionTaken
+        });
 
         // 4. Add a 'maintenanceHistory' entry so it appears correctly in the log
         item.maintenanceHistory.push({
@@ -677,8 +723,6 @@ item.lostHistory.push({
     // 7. Approve the original request
     await request.approve(req.user._id, notes);
     
-    // This 'request.save()' is now safe because we no longer
-    // modified the 'request.poolId' populated document.
     await request.save(); 
 
     res.json({
@@ -740,7 +784,6 @@ router.put('/requests/:id/reject', [
 
   } catch (error) {
     console.error('Reject request error:', error);
-    // ======== 泙 FIXED TYPO HERE 泙 ========
     res.status(500).json({
       success: false,
       message: 'Server error rejecting request',
@@ -801,9 +844,9 @@ router.get('/reports/summary', async (req, res) => {
         },
         {
           $project: {
-            firstName: 1,
-            lastName: 1,
-            badgeNumber: 1,
+            // 🟡 FIXED: Use 'fullName'
+            fullName: 1, 
+            officerId: 1, // Use officerId instead of badgeNumber
             requestCount: { $size: '$requests' }
           }
         },

@@ -703,6 +703,7 @@ router.post('/pools/mark-recovered', adminOnly, [
 
 
 // @route   POST /api/equipment/pools/write-off-lost
+// @route   POST /api/equipment/pools/write-off-lost
 router.post('/pools/write-off-lost', adminOnly, [
   body('poolId').isMongoId(),
   body('uniqueId').notEmpty(),
@@ -722,20 +723,34 @@ router.post('/pools/write-off-lost', adminOnly, [
     const item = pool.findItemByUniqueId(uniqueId);
     if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
     
-    if (item.status !== 'Maintenance') {
-      return res.status(400).json({ success: false, message: 'Item is not in maintenance (lost) status' });
+    // ======== 🟢 LOGIC UPDATED HERE 🟢 ========
+
+    // 1. Check if already written off
+    if (item.status === 'Lost') {
+      return res.status(400).json({ success: false, message: 'This item has already been written off.' });
     }
 
+    // 2. Find the latest maintenance log
+    const lastMaintLog = (item.maintenanceHistory && item.maintenanceHistory.length > 0)
+      ? item.maintenanceHistory[item.maintenanceHistory.length - 1]
+      : null;
+
+    // 3. Check if it's actually a lost item awaiting write-off
+    //    We check the reason and make sure it hasn't already been "fixed" (written off)
+    if (!lastMaintLog || !lastMaintLog.reason.startsWith("ITEM REPORTED LOST") || lastMaintLog.fixedBy) {
+      return res.status(400).json({ success: false, message: 'Item is not a lost item awaiting write-off.' });
+    }
+    
+    // 4. If checks pass, proceed
     item.status = 'Lost';
     item.condition = 'Out of Service'; 
     
-    let maintLog = item.maintenanceHistory.find(entry => !entry.fixedBy && entry.reason.startsWith("ITEM REPORTED LOST"));
-    if (maintLog) {
-      maintLog.fixedDate = new Date();
-      maintLog.fixedBy = req.user._id;
-      maintLog.action = `ITEM WRITTEN OFF. Status: Lost. Final Report: ${notes}`;
-    }
+    // 5. Update the maintenance log entry (the one we just checked)
+    lastMaintLog.fixedDate = new Date();
+    lastMaintLog.fixedBy = req.user._id;
+    lastMaintLog.action = `ITEM WRITTEN OFF. Status: Lost. Final Report: ${notes}`;
     
+    // 6. Update the corresponding lost history entry
     let lostLog = item.lostHistory.find(entry => entry.status === 'Under Investigation');
     if (lostLog) {
       lostLog.status = 'Closed';

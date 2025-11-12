@@ -24,6 +24,7 @@ function Landing() {
     setIsMenuOpen(!isMenuOpen);
   };
 
+  // ======== 🟢 MODIFIED THIS FUNCTION 🟢 ========
   const handleNavClick = (name) => {
     setActiveNav(name);
     setIsMenuOpen(false);
@@ -40,12 +41,13 @@ function Landing() {
       }
     } else if (name === 'login') {
       navigate('/login');
-    } else if (name === 'admin') {
-      navigate('/admin');
-    } else if (name === 'home') {
+    } 
+    // --- 'admin' block removed ---
+    else if (name === 'home') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
+  // ===============================================
 
   const handleLoginClick = () => {
     navigate('/login');
@@ -120,6 +122,7 @@ function Landing() {
             <span className="brand-name">Police Inventory</span>
           </div>
 
+          {/* ======== 🟢 MODIFIED THIS BLOCK 🟢 ======== */}
           <ul className="navbar-links-desktop">
             <li>
               <button
@@ -145,14 +148,7 @@ function Landing() {
                 Login
               </button>
             </li>
-            <li>
-              <button
-                className={`nav-link-btn ${activeNav === 'admin' ? 'active' : ''}`}
-                onClick={() => handleNavClick('admin')}
-              >
-                Admin
-              </button>
-            </li>
+            {/* --- 'Admin' button list item removed --- */}
             <li>
               <button
                 className={`nav-link-btn ${activeNav === 'contact' ? 'active' : ''}`}
@@ -162,21 +158,24 @@ function Landing() {
               </button>
             </li>
           </ul>
+          {/* =============================================== */}
 
           <button className="menu-toggle-btn" onClick={handleMenuToggle}>
             {isMenuOpen ? <CloseIcon size={24} /> : <MenuIcon size={24} />}
           </button>
         </div>
 
+        {/* ======== 🟢 MODIFIED THIS BLOCK 🟢 ======== */}
         {isMenuOpen && (
           <div className="navbar-mobile-menu">
             <button onClick={() => handleNavClick('home')} className="mobile-menu-link">Home</button>
             <button onClick={() => handleNavClick('features')} className="mobile-menu-link">Features</button>
             <button onClick={() => handleNavClick('login')} className="mobile-menu-link">Login</button>
-            <button onClick={() => handleNavClick('admin')} className="mobile-menu-link">Admin</button>
+            {/* --- 'Admin' button removed --- */}
             <button onClick={() => handleNavClick('contact')} className="mobile-menu-link">Contact</button>
           </div>
         )}
+        {/* =============================================== */}
       </nav>
 
       {/* ===== HERO SECTION ===== */}
