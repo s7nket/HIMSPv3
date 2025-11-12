@@ -7,20 +7,20 @@ const MaintenanceLog = () => {
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // 1. Use separate state for each modal
   const [showRepairModal, setShowRepairModal] = useState(false);
   const [showWriteOffModal, setShowWriteOffModal] = useState(false);
   const [showRecoverModal, setShowRecoverModal] = useState(false);
+  
+  // 1. ======== 🟢 ADDED STATE FOR NEW MODAL 🟢 ========
+  const [showLostDetailsModal, setShowLostDetailsModal] = useState(false);
 
   useEffect(() => {
     fetchMaintenanceItems();
   }, []);
 
-  // 2. Fetch from the correct 'maintenance-items' route
   const fetchMaintenanceItems = async () => {
     try {
       setLoading(true);
-      // This route is designed to get all items with status: 'Maintenance'
       const response = await equipmentAPI.getMaintenanceItems();
       if (response.data.success) {
         setMaintenanceItems(response.data.data.items);
@@ -32,21 +32,23 @@ const MaintenanceLog = () => {
     }
   };
 
-  // 3. Close all modals and refresh the list
+  // 3. ======== 🟢 UPDATED 🟢 ========
   const handleSuccess = () => {
     setSelectedItem(null);
     setShowRepairModal(false);
     setShowWriteOffModal(false);
     setShowRecoverModal(false);
-    fetchMaintenanceItems(); // Refresh the list
+    setShowLostDetailsModal(false); // <-- Add this
+    fetchMaintenanceItems();
   };
 
-  // 4. Close all modals without refreshing
+  // 4. ======== 🟢 UPDATED 🟢 ========
   const handleCloseModals = () => {
     setSelectedItem(null);
     setShowRepairModal(false);
     setShowWriteOffModal(false);
     setShowRecoverModal(false);
+    setShowLostDetailsModal(false); // <-- Add this
   };
 
   if (loading) {
@@ -85,14 +87,13 @@ const MaintenanceLog = () => {
               </thead>
               <tbody>
                 {maintenanceItems.map((item) => {
-                  // 5. Check if item is Lost or just for Maintenance
-                  // The backend flags lost items by starting the reason with "ITEM REPORTED LOST"
-                  const lastMaintLog = item.maintenanceHistory[item.maintenanceHistory.length - 1];
+                  const lastMaintLog = (item.maintenanceHistory && item.maintenanceHistory.length > 0) 
+                    ? item.maintenanceHistory[item.maintenanceHistory.length - 1] 
+                    : null;
                   const problemReason = lastMaintLog?.reason || 'N/A';
                   const isLostItem = problemReason.startsWith("ITEM REPORTED LOST");
 
-                  // 6. Get Lost details if they exist
-                  const lostReport = isLostItem && item.lostHistory?.length > 0
+                  const lostReport = (isLostItem && item.lostHistory && item.lostHistory.length > 0)
                     ? item.lostHistory[item.lostHistory.length - 1]
                     : null;
 
@@ -116,9 +117,16 @@ const MaintenanceLog = () => {
                         <span className="badge badge-secondary">{item.condition}</span>
                       </td>
                       <td>
-                        {/* 7. Show different buttons based on item type */}
+                        {/* 5. ======== 🟢 UPDATED ACTIONS 🟢 ======== */}
                         {isLostItem ? (
                           <>
+                            {/* THIS IS THE NEW BUTTON */}
+                            <button
+                              onClick={() => { setSelectedItem(item); setShowLostDetailsModal(true); }}
+                              className="btn btn-sm btn-info"
+                            >
+                              View Details
+                            </button>
                             <button
                               onClick={() => { setSelectedItem(item); setShowWriteOffModal(true); }}
                               className="btn btn-sm btn-danger"
@@ -150,7 +158,6 @@ const MaintenanceLog = () => {
         )}
       </div>
 
-      {/* 8. Render all three possible modals */}
       {showRepairModal && selectedItem && (
         <CompleteRepairModal
           item={selectedItem}
@@ -174,11 +181,20 @@ const MaintenanceLog = () => {
           onSuccess={handleSuccess}
         />
       )}
+
+      {/* 6. ======== 🟢 RENDER THE NEW MODAL 🟢 ======== */}
+      {showLostDetailsModal && selectedItem && (
+        <LostRequestDetailsModal
+          item={selectedItem}
+          onClose={handleCloseModals}
+        />
+      )}
     </>
   );
 };
 
-// --- This is the modal for completing a REPAIR ---
+
+// ... (CompleteRepairModal is unchanged) ...
 const CompleteRepairModal = ({ item, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     description: '',
@@ -186,8 +202,11 @@ const CompleteRepairModal = ({ item, onClose, onSuccess }) => {
     cost: ''
   });
   const [loading, setLoading] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
-  const problemReportEntry = item.maintenanceHistory[item.maintenanceHistory.length - 1];
+  const problemReportEntry = (item.maintenanceHistory && item.maintenanceHistory.length > 0) 
+    ? item.maintenanceHistory[item.maintenanceHistory.length - 1] 
+    : null;
   let problemReason = problemReportEntry?.reason || 'No description provided.';
 
   const handleChange = (e) => {
@@ -240,6 +259,74 @@ const CompleteRepairModal = ({ item, onClose, onSuccess }) => {
                 readOnly
               />
             </div>
+            
+            <button 
+              type="button" 
+              className="btn btn-sm btn-outline-info" 
+              onClick={() => setShowHistory(!showHistory)}
+              style={{ marginBottom: '1rem' }}
+            >
+              {showHistory ? 'Hide' : 'Show'} Full Item History
+            </button>
+
+            {showHistory && (
+              <div className="item-history-details" style={{ 
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  marginBottom: '1rem', 
+                  padding: '1rem', 
+                  border: '1px solid #ddd', 
+                  borderRadius: '5px',
+                  backgroundColor: '#f9f9f9'
+                }}>
+
+                <h5 style={{ marginTop: 0, borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>
+                  Usage History
+                </h5>
+                {(item.usageHistory && item.usageHistory.length > 0) ? (
+                  <ul style={{ listStyleType: 'none', paddingLeft: 0, fontSize: '0.9rem' }}>
+                    {[...item.usageHistory].sort((a, b) => new Date(b.issuedDate) - new Date(a.issuedDate)).map((entry, index) => (
+                      <li key={`use-${index}`} style={{ marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>
+                        <strong>{new Date(entry.issuedDate).toLocaleDateString()} - {entry.returnedDate ? new Date(entry.returnedDate).toLocaleDateString() : 'Issued'}</strong>
+                        <br />
+                        Issued to: {entry.officerName || 'N/A'}
+                        <br />
+                        Return Condition: {entry.conditionAtReturn || 'N/A'}
+                        <br />
+                        Remarks: {entry.remarks || 'N/A'}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No usage history found.</p>
+                )}
+
+                <h5 style={{ marginTop: '1rem', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>
+                  Maintenance History
+                </h5>
+                {(item.maintenanceHistory && item.maintenanceHistory.length > 0) ? (
+                  <ul style={{ listStyleType: 'none', paddingLeft: 0, fontSize: '0.9rem' }}>
+                    {[...item.maintenanceHistory].sort((a, b) => new Date(b.reportedDate) - new Date(a.reportedDate)).map((entry, index) => (
+                      <li key={`maint-${index}`} style={{ marginBottom: '10px', borderBottom: '1px solid #eee', paddingBottom: '5px' }}>
+                        <strong>Reported: {new Date(entry.reportedDate).toLocaleDateString()}</strong>
+                        <br />
+                        Problem: {entry.reason || 'N/A'}
+                        {entry.fixedDate && (
+                          <>
+                            <br />
+                            Fixed: {new Date(entry.fixedDate).toLocaleDateString()}
+                            <br />
+                            Action: {entry.action || 'N/A'}
+                          </>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>No maintenance history found.</p>
+                )}
+              </div>
+            )}
             
             <div className="form-group">
               <label className="form-label">Repair Actions Taken <span className="required">*</span></label>
@@ -295,11 +382,15 @@ const CompleteRepairModal = ({ item, onClose, onSuccess }) => {
 };
 
 
-// --- 9. NEW MODAL for Writing Off a Lost Item ---
+// ... (WriteOffModal is unchanged) ...
 const WriteOffModal = ({ item, onClose, onSuccess }) => {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
-  const lostReport = item.lostHistory[item.lostHistory.length - 1];
+  const [showDetails, setShowDetails] = useState(false);
+  
+  const lostReport = (item.lostHistory && Array.isArray(item.lostHistory) && item.lostHistory.length > 0)
+    ? item.lostHistory[item.lostHistory.length - 1]
+    : null;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -338,18 +429,94 @@ const WriteOffModal = ({ item, onClose, onSuccess }) => {
               <p><strong>Warning:</strong> This action is final. It will permanently mark the item as 'Lost' and close the investigation.</p>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Officer's Report (Read-only)</label>
-              <textarea
-                className="form-control"
-                rows="4"
-                value={`FIR: ${lostReport.firNumber} on ${new Date(lostReport.firDate).toLocaleDateString()}\nPolice Station: ${lostReport.policeStation}\nIncident: ${lostReport.description}`}
-                readOnly
-              />
-            </div>
+            <button 
+              type="button" 
+              className="btn btn-sm btn-outline-info" 
+              onClick={() => setShowDetails(!showDetails)}
+              style={{ marginBottom: '1rem' }}
+              disabled={!lostReport} 
+            >
+              {showDetails ? 'Hide' : 'Show'} Officer's Full Report
+            </button>
+            
+            {showDetails && !lostReport && (
+              <div className="form-note form-note-warning" style={{marginBottom: '1rem'}}>
+                <p>Could not find the original officer's report details for this item. This may be an older entry.</p>
+              </div>
+            )}
+            
+            {showDetails && lostReport && (
+              <div className="officer-report-details" style={{ 
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  marginBottom: '1rem', 
+                  padding: '1rem', 
+                  border: '1px solid #ddd', 
+                  borderRadius: '5px',
+                  backgroundColor: '#f9f9f9'
+                }}>
+                
+                <h5 style={{ marginTop: 0, borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>
+                  Original Lost Item Report
+                </h5>
+                
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Date of Loss</label>
+                    <input type="text" className="form-control" value={lostReport.dateOfLoss ? new Date(lostReport.dateOfLoss).toLocaleDateString() : 'N/A'} readOnly />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Place of Loss</label>
+                    <input type="text" className="form-control" value={lostReport.placeOfLoss || 'N/A'} readOnly />
+                  </div>
+                </div>
+                
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">FIR Number</label>
+                    <input type="text" className="form-control" value={lostReport.firNumber || 'N/A'} readOnly />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">FIR Date</label>
+                    <input type="text" className="form-control" value={lostReport.firDate ? new Date(lostReport.firDate).toLocaleDateString() : 'N/A'} readOnly />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                    <div className="form-group">
+                        <label className="form-label">Police Station</label>
+                        <input type="text" className="form-control" value={lostReport.policeStation || 'N/A'} readOnly />
+                    </div>
+                    <div className="form-group">
+                        <label className="form-label">Duty at Time of Loss</label>
+                        <input type="text" className="form-control" value={lostReport.dutyAtTimeOfLoss || 'N/A'} readOnly />
+                    </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Remedial Action Taken (by Officer)</label>
+                  <textarea
+                    className="form-control"
+                    rows="2"
+                    value={lostReport.remedialActionTaken || 'N/A'}
+                    readOnly
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label className="form-label">Incident Description (by Officer)</label>
+                  <textarea
+                    className="form-control"
+                    rows="2"
+                    value={lostReport.description || 'N/A'}
+                    readOnly
+                  />
+                </div>
+              </div>
+            )}
             
             <div className="form-group">
-              <label className="form-label">Final Report / Write-Off Notes <span className="required">*</span></label>
+              <label className="form-label">Admin: Final Report / Write-Off Notes <span className="required">*</span></label>
               <textarea
                 name="notes"
                 value={notes}
@@ -375,7 +542,8 @@ const WriteOffModal = ({ item, onClose, onSuccess }) => {
   );
 };
 
-// --- 10. NEW MODAL for Marking a Lost Item as Recovered ---
+
+// ... (RecoverItemModal is unchanged) ...
 const RecoverItemModal = ({ item, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     notes: '',
@@ -469,6 +637,149 @@ const RecoverItemModal = ({ item, onClose, onSuccess }) => {
     </div>
   );
 };
+
+
+// 7. ======== 🟢 ADDED THIS ENTIRE NEW COMPONENT 🟢 ========
+// This is adapted from ProcessRequests.js to work with the 'item' prop
+const LostRequestDetailsModal = ({ item, onClose }) => {
+  
+  // 1. Get the lost report SAFELY
+  const lostReport = (item.lostHistory && Array.isArray(item.lostHistory) && item.lostHistory.length > 0)
+    ? item.lostHistory[item.lostHistory.length - 1]
+    : null;
+
+  // 2. Add the date formatter
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  // 3. Add a loading/error state
+  if (!lostReport) {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>Report Details Not Found</h3>
+            <button onClick={onClose} className="close-btn">&times;</button>
+          </div>
+          <div className="modal-body">
+            <p>The original officer's report details could not be found for this item. This may be an older entry.</p>
+          </div>
+          <div className="modal-actions">
+            <button type="button" onClick={onClose} className="btn btn-secondary">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Main modal body (adapted to use 'item' and 'lostReport')
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Lost Item Report Details</h3>
+          <button onClick={onClose} className="close-btn">&times;</button>
+        </div>
+        
+        <div className="modal-body">
+          <div className="officer-report-details" style={{ 
+              maxHeight: '70vh',
+              overflowY: 'auto',
+              padding: '10px'
+            }}>
+            
+            <h5 style={{ marginTop: 0, borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>
+              Item Information
+            </h5>
+            
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Item Pool</label>
+                <input type="text" className="form-control" value={item.poolName || 'N/A'} readOnly />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Item Unique ID</label>
+                <input type="text" className="form-control" value={item.uniqueId || 'N/A'} readOnly />
+              </div>
+            </div>
+
+            <h5 style={{ marginTop: '1rem', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>
+              Incident Details
+            </h5>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Date of Loss</label>
+                <input type="text" className="form-control" value={formatDate(lostReport.dateOfLoss)} readOnly />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Place of Loss</label>
+                <input type="text" className="form-control" value={lostReport.placeOfLoss || 'N/A'} readOnly />
+              </div>
+            </div>
+            
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Police Station</label>
+                <input type="text" className="form-control" value={lostReport.policeStation || 'N/A'} readOnly />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Duty at Time of Loss</label>
+                <input type="text" className="form-control" value={lostReport.dutyAtTimeOfLoss || 'N/A'} readOnly />
+              </div>
+            </div>
+
+            <h5 style={{ marginTop: '1rem', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>
+              Official Report
+            </h5>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">FIR Number</label>
+                <input type="text" className="form-control" value={lostReport.firNumber || 'N/A'} readOnly />
+              </div>
+              <div className="form-group">
+                <label className="form-label">FIR Date</label>
+                <input type="text" className="form-control" value={formatDate(lostReport.firDate)} readOnly />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Remedial Action Taken (by Officer)</label>
+              <textarea
+                className="form-control"
+                rows="3"
+                value={lostReport.remedialActionTaken || 'N/A'}
+                readOnly
+              />
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Incident Description (by Officer)</label>
+              <textarea
+                className="form-control"
+                rows="3"
+                value={lostReport.description || 'N/A'}
+                readOnly
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button type="button" onClick={onClose} className="btn btn-secondary">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+// ==========================================================
 
 
 export default MaintenanceLog;

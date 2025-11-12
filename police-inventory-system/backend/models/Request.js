@@ -76,6 +76,40 @@ const requestSchema = new mongoose.Schema({
     enum: ['Excellent', 'Good', 'Fair', 'Poor', 'Out of Service', 'Lost']
   },
   // =====================================
+  
+  // ======== 🟢 ADD THIS ENTIRE BLOCK 🟢 ========
+  // Fields for 'Lost' type requests
+  firNumber: {
+    type: String,
+    trim: true
+  },
+  firDate: {
+    type: Date
+  },
+  policeStation: {
+    type: String,
+    trim: true
+  },
+  dateOfLoss: {
+    type: Date
+  },
+  placeOfLoss: {
+    type: String,
+    trim: true
+  },
+  dutyAtTimeOfLoss: {
+    type: String,
+    trim: true
+  },
+  remedialActionTaken: {
+    type: String,
+    trim: true
+  },
+  witnesses: {
+    type: String,
+    trim: true
+  },
+  // ============================================
 
   adminNotes: {
     type: String,
@@ -162,7 +196,7 @@ requestSchema.pre('save', async function(next) {
     // 4. If we found a previous request...
     if (lastRequest && lastRequest.requestId) {
       // Get the last 4 digits (e.g., "0001")
-      const lastSequenceStr = lastRequest.requestId.substring(prefix.length); 
+      const lastSequenceStr = lastRequest.requestId.substring(prefix.length);
       
       // Convert to a number, add 1
       if (!isNaN(parseInt(lastSequenceStr, 10))) {
@@ -212,9 +246,9 @@ requestSchema.methods.complete = function(adminId, notes) {
 // Static method to get pending requests
 requestSchema.statics.getPendingRequests = function() {
   return this.find({ status: 'Pending' })
-    .populate('requestedBy', 'fullName officerId designation') 
-    .populate('equipmentId', 'name model serialNumber category') 
-    .populate('poolId', 'poolName model category manufacturer') 
+    .populate('requestedBy', 'fullName officerId designation')
+    .populate('equipmentId', 'name model serialNumber category')
+    .populate('poolId', 'poolName model category manufacturer')
     .sort({ createdAt: -1 });
 };
 

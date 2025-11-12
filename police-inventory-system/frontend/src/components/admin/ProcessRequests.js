@@ -11,6 +11,10 @@ const ProcessRequests = () => {
   const [typeFilter, setTypeFilter] = useState('');
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showRejectionModal, setShowRejectionModal] = useState(false);
+  
+  // 1. ADDED STATE for the new details modal
+  const [showLostDetailsModal, setShowLostDetailsModal] = useState(false);
+  
   const [selectedRequest, setSelectedRequest] = useState(null);
 
   useEffect(() => {
@@ -48,9 +52,17 @@ const ProcessRequests = () => {
     setShowRejectionModal(true);
   };
 
+  // 2. ADDED HANDLER for the new modal
+  const handleViewLostDetailsClick = (request) => {
+    setSelectedRequest(request);
+    setShowLostDetailsModal(true);
+  };
+
+  // 3. UPDATED handleCloseModals
   const handleCloseModals = () => {
     setShowApprovalModal(false);
     setShowRejectionModal(false);
+    setShowLostDetailsModal(false); // <-- Add this line
     setSelectedRequest(null);
   };
 
@@ -96,9 +108,7 @@ const ProcessRequests = () => {
               <option value="Issue">Issue</option>
               <option value="Return">Return</option>
               <option value="Maintenance">Maintenance</option>
-              {/* ======== 🟢 ADDED THIS LINE 🟢 ======== */}
               <option value="Lost">Lost</option>
-              {/* ======================================= */}
             </select>
           </div>
         </div>
@@ -141,14 +151,11 @@ const ProcessRequests = () => {
                           {request.poolId?.poolName || request.poolName || request.equipmentId?.name || 'N/A'}
                         </strong>
                         
-                        {/* ======== 🟢 MODIFIED THIS BLOCK 🟢 ======== */}
-                        {/* Always show the reason, as it's required for all request types */}
                         {request.reason && (
                           <p className="request-reason" title={request.reason}>
                             {request.reason}
                           </p>
                         )}
-                        {/* ======================================= */}
                       </td>
                       <td>
                         <span className={`badge badge-${request.requestType === 'Issue' ? 'info' : (request.requestType === 'Return' ? 'warning' : 'danger')}`}>
@@ -167,6 +174,7 @@ const ProcessRequests = () => {
                         </span>
                       </td>
                       <td>
+                        {/* 4. UPDATED ACTIONS cell */}
                         {request.status === 'Pending' && (
                           <>
                             <button
@@ -181,6 +189,16 @@ const ProcessRequests = () => {
                             >
                               Reject
                             </button>
+                            
+                            {/* 5. ADDED conditional "View Details" button */}
+                            {request.requestType === 'Lost' && (
+                              <button
+                                onClick={() => handleViewLostDetailsClick(request)}
+                                className="btn btn-sm btn-info"
+                              >
+                                View Details
+                              </button>
+                            )}
                           </>
                         )}
                       </td>
@@ -234,11 +252,21 @@ const ProcessRequests = () => {
           }}
         />
       )}
+
+      {/* 6. RENDER the new modal */}
+      {showLostDetailsModal && selectedRequest && (
+        <LostRequestDetailsModal
+          request={selectedRequest}
+          onClose={handleCloseModals}
+        />
+      )}
     </>
   );
 };
 
 // ... (ApprovalModal, RejectionModal, and helper functions are unchanged) ...
+// ... (Scroll down to see the new modal added at the bottom) ...
+
 
 const ApprovalModal = ({ request, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -278,47 +306,57 @@ const ApprovalModal = ({ request, onClose, onSuccess }) => {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Officer's Reason</label>
-            <textarea
-              className="form-control"
-              rows="2"
-              value={request.reason}
-              readOnly
-            />
-          </div>
+          <div className="modal-body">
 
-          {(request.requestType === 'Return' || request.requestType === 'Maintenance') && (
+            {/* 7. ADDED conditional check for "Lost" type */}
+            {request.requestType === 'Lost' ? (
+              <div className="form-note form-note-danger">
+                <p><strong>Warning:</strong> You are approving a "Lost" report. Please review the officer's full details before proceeding. This will move the item to the Maintenance Log for investigation.</p>
+              </div>
+            ) : (
+              <div className="form-group">
+                <label className="form-label">Officer's Reason</label>
+                <textarea
+                  className="form-control"
+                  rows="2"
+                  value={request.reason}
+                  readOnly
+                />
+              </div>
+            )}
+
+            {(request.requestType === 'Return' || request.requestType === 'Maintenance') && (
+              <div className="form-group">
+                <label className="form-label">Officer Reported Condition</label>
+                <select
+                  name="condition"
+                  value={formData.condition}
+                  onChange={handleChange}
+                  className="form-control"
+                >
+                  <option value="Excellent">Excellent</option>
+                  <option value="Good">Good</option>
+                  <option value="Fair">Fair</option>
+                  <option value="Poor">Poor</option>
+                  <option value="Out of Service">Out of Service</option>
+                </select>
+                <small>Confirm the condition before approving.</small>
+              </div>
+            )}
+
             <div className="form-group">
-              <label className="form-label">Officer Reported Condition</label>
-              <select
-                name="condition"
-                value={formData.condition}
+              <label className="form-label">Approval Notes (Optional)</label>
+              <textarea
+                name="notes"
+                value={formData.notes}
                 onChange={handleChange}
                 className="form-control"
-              >
-                <option value="Excellent">Excellent</option>
-                <option value="Good">Good</option>
-                <option value="Fair">Fair</option>
-                <option value="Poor">Poor</option>
-                <option value="Out of Service">Out of Service</option>
-              </select>
-              <small>Confirm the condition before approving.</small>
+                rows="3"
+                placeholder="Add any additional notes for this approval..."
+              />
             </div>
-          )}
 
-          <div className="form-group">
-            <label className="form-label">Approval Notes (Optional)</label>
-            <textarea
-              name="notes"
-              value={formData.notes}
-              onChange={handleChange}
-              className="form-control"
-              rows="3"
-              placeholder="Add any additional notes for this approval..."
-            />
           </div>
-
           <div className="modal-actions">
             <button
               type="button"
@@ -385,29 +423,32 @@ const RejectionModal = ({ request, onClose, onSuccess }) => {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label className="form-label">Officer's Reason for Request</label>
-            <textarea
-              className="form-control"
-              rows="2"
-              value={request.reason}
-              readOnly
-            />
-          </div>
+          <div className="modal-body">
 
-          <div className="form-group">
-            <label className="form-label">Reason for Rejection <span style={{ color: 'red' }}>*</span></label>
-            <textarea
-              name="reason"
-              value={formData.reason}
-              onChange={handleChange}
-              className="form-control"
-              rows="3"
-              placeholder="Please provide a detailed reason for rejection..."
-              required
-            />
-          </div>
+            <div className="form-group">
+              <label className="form-label">Officer's Reason for Request</label>
+              <textarea
+                className="form-control"
+                rows="2"
+                value={request.reason}
+                readOnly
+              />
+            </div>
 
+            <div className="form-group">
+              <label className="form-label">Reason for Rejection <span style={{ color: 'red' }}>*</span></label>
+              <textarea
+                name="reason"
+                value={formData.reason}
+                onChange={handleChange}
+                className="form-control"
+                rows="3"
+                placeholder="Please provide a detailed reason for rejection..."
+                required
+              />
+            </div>
+
+          </div>
           <div className="modal-actions">
             <button
               type="button"
@@ -429,6 +470,133 @@ const RejectionModal = ({ request, onClose, onSuccess }) => {
     </div>
   );
 };
+
+
+// 8. ======== 泙 ADDED THIS ENTIRE NEW COMPONENT 泙 ========
+const LostRequestDetailsModal = ({ request, onClose }) => {
+  
+  // Helper to format dates, handles nulls
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      {/* Make modal larger for all the details */}
+      <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Lost Item Report Details</h3>
+          <button onClick={onClose} className="close-btn">&times;</button>
+        </div>
+        
+        <div className="modal-body">
+          <div className="officer-report-details" style={{ 
+              maxHeight: '70vh',
+              overflowY: 'auto',
+              padding: '10px'
+            }}>
+            
+            <h5 style={{ marginTop: 0, borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>
+              Item & Officer Information
+            </h5>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Officer Name</label>
+                <input type="text" className="form-control" value={request.requestedBy?.fullName || 'N/A'} readOnly />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Officer ID</label>
+                <input type="text" className="form-control" value={request.requestedBy?.officerId || 'N/A'} readOnly />
+              </div>
+            </div>
+            
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Item Pool</label>
+                <input type="text" className="form-control" value={request.poolId?.poolName || 'N/A'} readOnly />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Item Unique ID</label>
+                <input type="text" className="form-control" value={request.assignedUniqueId || 'N/A'} readOnly />
+              </div>
+            </div>
+
+            <h5 style={{ marginTop: '1rem', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>
+              Incident Details
+            </h5>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Date of Loss</label>
+                <input type="text" className="form-control" value={formatDate(request.dateOfLoss)} readOnly />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Place of Loss</label>
+                <input type="text" className="form-control" value={request.placeOfLoss || 'N/A'} readOnly />
+              </div>
+            </div>
+            
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Police Station</label>
+                <input type="text" className="form-control" value={request.policeStation || 'N/A'} readOnly />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Duty at Time of Loss</label>
+                <input type="text" className="form-control" value={request.dutyAtTimeOfLoss || 'N/A'} readOnly />
+              </div>
+            </div>
+
+            <h5 style={{ marginTop: '1rem', borderBottom: '1px solid #ccc', paddingBottom: '5px' }}>
+              Official Report
+            </h5>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">FIR Number</label>
+                <input type="text" className="form-control" value={request.firNumber || 'N/A'} readOnly />
+              </div>
+              <div className="form-group">
+                <label className="form-label">FIR Date</label>
+                <input type="text" className="form-control" value={formatDate(request.firDate)} readOnly />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Remedial Action Taken (by Officer)</label>
+              <textarea
+                className="form-control"
+                rows="3"
+                value={request.remedialActionTaken || 'N/A'}
+                readOnly
+              />
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Incident Description (by Officer)</label>
+              <textarea
+                className="form-control"
+                rows="3"
+                value={request.reason || 'N/A'}
+                readOnly
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="modal-actions">
+          <button type="button" onClick={onClose} className="btn btn-secondary">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+// ==========================================================
+
 
 const getStatusBadgeClass = (status) => {
   const classes = {

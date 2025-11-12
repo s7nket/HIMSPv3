@@ -618,19 +618,22 @@ router.put('/requests/:id/approve', [
         
         // 3. Add the official 'lostHistory' log entry
         // 3. Add the official 'lostHistory' log entry
-        item.lostHistory.push({
-          reportedDate: new Date(),
-          reportedBy: request.requestedBy._id,
-          firNumber: request.firNumber,
-          firDate: request.firDate,
-          policeStation: request.policeStation,       // <-- ADDED
-          dateOfLoss: request.dateOfLoss,           // <-- ADDED
-          placeOfLoss: request.placeOfLoss,         // <-- ADDED
-          dutyAtTimeOfLoss: request.dutyAtTimeOfLoss, // <-- ADDED
-          remedialActionTaken: request.remedialActionTaken, // <-- ADDED
-          description: request.reason, // Officer's description of loss
-          status: 'Under Investigation'
-        });
+        // 3. Add the official 'lostHistory' log entry
+item.lostHistory.push({
+  reportedDate: new Date(),
+  reportedBy: request.requestedBy._id,
+  firNumber: request.firNumber,
+  firDate: request.firDate,
+  description: request.reason, // Officer's description of loss
+  status: 'Under Investigation',
+
+  // --- 🟢 ADD ALL THESE MISSING FIELDS ---
+  policeStation: request.policeStation,
+  dateOfLoss: request.dateOfLoss,
+  placeOfLoss: request.placeOfLoss,
+  dutyAtTimeOfLoss: request.dutyAtTimeOfLoss,
+  remedialActionTaken: request.remedialActionTaken
+});
 
         // 4. Add a 'maintenanceHistory' entry so it appears correctly in the log
         item.maintenanceHistory.push({
