@@ -290,6 +290,15 @@ export const equipmentAPI = {
   completeMaintenance: (data) => {
     console.log('🔄 POST /equipment/pools/complete-maintenance', data);
     return api.post('/equipment/pools/complete-maintenance', data);
+  },
+  writeOffLost: (data) => {
+    console.log('🔄 POST /equipment/pools/write-off-lost', data);
+    return api.post('/equipment/pools/write-off-lost', data);
+  },
+
+  markAsRecovered: (data) => {
+    console.log('🔄 POST /equipment/pools/mark-recovered', data);
+    return api.post('/equipment/pools/mark-recovered', data);
   }
 };
 

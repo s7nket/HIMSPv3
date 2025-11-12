@@ -191,8 +191,8 @@ router.post('/requests', officerOnly, [
       if (condition !== 'Lost') {
         return res.status(400).json({ success: false, message: 'Lost request must have Lost condition.'});
       }
-      // Check all required "Lost" fields
-      const requiredLostFields = { firNumber, firDate, policeStation, dateOfLoss, placeOfLoss, dutyAtTimeOfLoss, remedialActionTaken };
+      // Check all required "Lost" fields (policeStation is now handled by fallback)
+      const requiredLostFields = { firNumber, firDate, dateOfLoss, placeOfLoss, dutyAtTimeOfLoss, remedialActionTaken };
       for (const field in requiredLostFields) {
         if (!requiredLostFields[field]) {
           return res.status(400).json({ success: false, message: `Field "${field}" is required for a Lost report.`});
@@ -213,7 +213,8 @@ router.post('/requests', officerOnly, [
       // Save all "Lost" fields
       firNumber: firNumber, 
       firDate: firDate ? new Date(firDate) : null,
-      policeStation: policeStation,
+      // Use policeStation from body or fallback to user's policeStation from token
+      policeStation: policeStation || req.user.policeStation,
       dateOfLoss: dateOfLoss ? new Date(dateOfLoss) : null,
       placeOfLoss: placeOfLoss,
       dutyAtTimeOfLoss: dutyAtTimeOfLoss,

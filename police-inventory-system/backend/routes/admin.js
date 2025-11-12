@@ -617,11 +617,17 @@ router.put('/requests/:id/approve', [
         item.condition = 'Out of Service'; // This is a fitting condition
         
         // 3. Add the official 'lostHistory' log entry
+        // 3. Add the official 'lostHistory' log entry
         item.lostHistory.push({
           reportedDate: new Date(),
           reportedBy: request.requestedBy._id,
           firNumber: request.firNumber,
           firDate: request.firDate,
+          policeStation: request.policeStation,       // <-- ADDED
+          dateOfLoss: request.dateOfLoss,           // <-- ADDED
+          placeOfLoss: request.placeOfLoss,         // <-- ADDED
+          dutyAtTimeOfLoss: request.dutyAtTimeOfLoss, // <-- ADDED
+          remedialActionTaken: request.remedialActionTaken, // <-- ADDED
           description: request.reason, // Officer's description of loss
           status: 'Under Investigation'
         });

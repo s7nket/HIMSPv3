@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { officerAPI } from '../../utils/api';
 import { toast } from 'react-toastify';
+import { useAuth } from '../../context/AuthContext'; // 1. Import useAuth
 
 const ReturnEquipment = ({ onEquipmentReturned }) => {
+  const { user } = useAuth(); // 2. Get user from context
   const [issuedEquipment, setIssuedEquipment] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showReturnModal, setShowReturnModal] = useState(false);
@@ -66,6 +68,7 @@ const ReturnEquipment = ({ onEquipmentReturned }) => {
               equipment={equipment}
               onReturn={handleReturnRequest}
               onRefresh={handleRefresh} // Pass refresh down
+              policeStation={user?.policeStation} // 3. Pass policeStation
             />
           ))}
         </div>
@@ -86,7 +89,7 @@ const ReturnEquipment = ({ onEquipmentReturned }) => {
 };
 
 // ======== 🟢 MODIFIED THIS COMPONENT 🟢 ========
-const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
+const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh, policeStation }) => { // 4. Accept policeStation
   const isOverdue = equipment.issuedTo.expectedReturnDate && 
     new Date(equipment.issuedTo.expectedReturnDate) < new Date();
 
@@ -165,6 +168,7 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
       {showLostModal && (
         <LostModal
           equipment={equipment}
+          policeStation={policeStation} // 5. Pass policeStation to LostModal
           onClose={() => setShowLostModal(false)}
           onSuccess={() => {
             setShowLostModal(false);
@@ -388,47 +392,136 @@ const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
   );
 };
 
-// ======== 🟢 8. NEW COMPONENT ADDED 🟢 ========
+// ======== 泙 8. NEW COMPONENT ADDED (NOW MODIFIED) 泙 ========
+// ======== 泙 8. NEW COMPONENT (NOW WITH ADVANCED VALIDATION) 泙 ========
 const LostModal = ({ equipment, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     reason: '', // This is the "description"
     firNumber: '',
     firDate: '',
+    policeStation: '', 
+    dateOfLoss: '',
+    placeOfLoss: '',
+    dutyAtTimeOfLoss: '',
+    remedialActionTaken: '',
     condition: 'Lost', // Hardcoded
     priority: 'Urgent' // Hardcoded
   });
   const [loading, setLoading] = useState(false);
+  // 1. Add state to hold validation errors
+  const [errors, setErrors] = useState({});
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // 2. Clear the specific error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: null }));
+    }
+  };
+
+  // 3. Create a comprehensive validation function
+  const validateForm = () => {
+    const { 
+      reason, firNumber, firDate, policeStation, dateOfLoss, 
+      placeOfLoss, dutyAtTimeOfLoss, remedialActionTaken 
+    } = formData;
+    
+    const newErrors = {};
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // Set to end of today to allow today's date
+
+    // --- Date of Loss Validation ---
+    let lossDate;
+    if (!dateOfLoss) {
+      newErrors.dateOfLoss = 'Date of Loss is required.';
+    } else {
+      lossDate = new Date(dateOfLoss);
+      if (isNaN(lossDate.getTime())) {
+        newErrors.dateOfLoss = 'Invalid date format.';
+      } else if (lossDate > today) {
+        newErrors.dateOfLoss = 'Date of Loss cannot be in the future.';
+      }
+    }
+
+    // --- Place of Loss Validation ---
+    if (!placeOfLoss || placeOfLoss.trim().length < 5) {
+      newErrors.placeOfLoss = 'Must be at least 5 characters long.';
+    }
+
+    // --- Police Station Validation ---
+    if (!policeStation || policeStation.trim().length < 5) {
+      newErrors.policeStation = 'Must be at least 5 characters long.';
+    }
+
+    // --- Duty Validation ---
+    if (!dutyAtTimeOfLoss || dutyAtTimeOfLoss.trim().length < 5) {
+      newErrors.dutyAtTimeOfLoss = 'Must be at least 5 characters long.';
+    }
+    
+    // --- FIR Number Validation (e.g., 123/2025) ---
+    const firRegex = /^\d{1,5}\/\d{4}$/;
+    if (!firNumber) {
+      newErrors.firNumber = 'FIR Number is required.';
+    } else if (!firRegex.test(firNumber)) {
+      newErrors.firNumber = 'Format must be XXX/YYYY (e.g., 123/2025).';
+    }
+
+    // --- FIR Date Validation ---
+    if (!firDate) {
+      newErrors.firDate = 'FIR Date is required.';
+    } else {
+      const firDateObj = new Date(firDate);
+      if (isNaN(firDateObj.getTime())) {
+        newErrors.firDate = 'Invalid date format.';
+      } else if (firDateObj > today) {
+        newErrors.firDate = 'FIR Date cannot be in the future.';
+      } else if (lossDate && firDateObj < lossDate) {
+        // Cross-field validation
+        newErrors.firDate = 'FIR Date cannot be before the Date of Loss.';
+      }
+    }
+
+    // --- Remedial Action Validation ---
+    if (!remedialActionTaken || remedialActionTaken.trim().length < 10) {
+      newErrors.remedialActionTaken = 'Please describe the action taken (min 10 chars).';
+    }
+    
+    // --- Description (Reason) Validation ---
+    if (!reason || reason.trim().length < 10) {
+      newErrors.reason = 'Please describe the incident (min 10 chars).';
+    }
+    
+    setErrors(newErrors);
+    // Return true if newErrors object is empty (no errors)
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.firNumber || !formData.firDate) {
-      toast.error('FIR Number and Date are required.');
-      return;
+    
+    // 4. Run validation first
+    if (!validateForm()) {
+      toast.error('Please correct the errors in the form.');
+      return; // Stop submission
     }
-    if (formData.reason.length < 10) {
-      toast.error('Please describe the incident (min 10 chars).');
-      return;
-    }
+    
+    // If validation passes, proceed with submission
     setLoading(true);
-
     try {
       await officerAPI.createRequest({
         poolId: equipment.poolId,
         uniqueId: equipment._id,
         requestType: 'Lost',
-        reason: formData.reason, // This is the description
-        priority: formData.priority,
-        condition: formData.condition,
-        firNumber: formData.firNumber,
-        firDate: formData.firDate
+        condition: 'Lost',
+        priority: 'Urgent',
+        ...formData // Send all form data
       });
       onSuccess(); // Will show toast in parent
     } catch (error) {
-      toast.error('Failed to submit lost report');
+      // The API interceptor in api.js will handle the toast
+      console.error('Failed to submit lost report', error);
     } finally {
       setLoading(false);
     }
@@ -442,7 +535,7 @@ const LostModal = ({ equipment, onClose, onSuccess }) => {
           <button onClick={onClose} className="close-btn">&times;</button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate> {/* noValidate disables browser validation */}
           <div className="modal-body">
             <div className="equipment-summary">
               <p>{equipment.model} - ID: {equipment.serialNumber}</p>
@@ -452,6 +545,64 @@ const LostModal = ({ equipment, onClose, onSuccess }) => {
               <p><strong>Warning:</strong> Reporting an item as lost is a serious matter and will require an official investigation.</p>
             </div>
 
+            {/* 5. Add error display spans under each input */}
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Date of Loss <span className="required">*</span></label>
+                <input
+                  type="date"
+                  name="dateOfLoss"
+                  value={formData.dateOfLoss}
+                  onChange={handleChange}
+                  className={`form-control ${errors.dateOfLoss ? 'is-invalid' : ''}`}
+                  required
+                />
+                {errors.dateOfLoss && <span className="error-text">{errors.dateOfLoss}</span>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Place of Loss <span className="required">*</span></label>
+                <input
+                  type="text"
+                  name="placeOfLoss"
+                  value={formData.placeOfLoss}
+                  onChange={handleChange}
+                  className={`form-control ${errors.placeOfLoss ? 'is-invalid' : ''}`}
+                  placeholder="e.g., Sector 17 Market"
+                  required
+                />
+                {errors.placeOfLoss && <span className="error-text">{errors.placeOfLoss}</span>}
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Police Station <span className="required">*</span></label>
+                <input
+                  type="text"
+                  name="policeStation"
+                  value={formData.policeStation}
+                  onChange={handleChange}
+                  className={`form-control ${errors.policeStation ? 'is-invalid' : ''}`}
+                  placeholder="e.g., Central Station"
+                  required
+                />
+                {errors.policeStation && <span className="error-text">{errors.policeStation}</span>}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Duty at Time of Loss <span className="required">*</span></label>
+                <input
+                  type="text"
+                  name="dutyAtTimeOfLoss"
+                  value={formData.dutyAtTimeOfLoss}
+                  onChange={handleChange}
+                  className={`form-control ${errors.dutyAtTimeOfLoss ? 'is-invalid' : ''}`}
+                  placeholder="e.g., Night Patrol, Checkpoint"
+                  required
+                />
+                {errors.dutyAtTimeOfLoss && <span className="error-text">{errors.dutyAtTimeOfLoss}</span>}
+              </div>
+            </div>
+            
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">FIR Number <span className="required">*</span></label>
@@ -460,35 +611,52 @@ const LostModal = ({ equipment, onClose, onSuccess }) => {
                   name="firNumber"
                   value={formData.firNumber}
                   onChange={handleChange}
-                  className="form-control"
+                  className={`form-control ${errors.firNumber ? 'is-invalid' : ''}`}
                   placeholder="e.g., 123/2025"
                   required
                 />
+                {errors.firNumber && <span className="error-text">{errors.firNumber}</span>}
               </div>
               <div className="form-group">
-                <label className="form-label">FIR Date <span className="required">*</span></label>
-                <input
-                  type="date"
-                  name="firDate"
-                  value={formData.firDate}
-                  onChange={handleChange}
-                  className="form-control"
-                  required
-                />
-              </div>
+                  <label className="form-label">FIR Date <span className="required">*</span></label>
+                  <input
+                    type="date"
+                    name="firDate"
+                    value={formData.firDate}
+                    onChange={handleChange}
+                    className={`form-control ${errors.firDate ? 'is-invalid' : ''}`}
+                    required
+                  />
+                  {errors.firDate && <span className="error-text">{errors.firDate}</span>}
+                </div>
             </div>
             
             <div className="form-group">
+              <label className="form-label">Remedial Action Taken <span className="required">*</span></label>
+              <textarea
+                name="remedialActionTaken"
+                value={formData.remedialActionTaken}
+                onChange={handleChange}
+                className={`form-control ${errors.remedialActionTaken ? 'is-invalid' : ''}`}
+                rows="3"
+                placeholder="Describe actions taken after the loss (e.g., 'Searched the area', 'Informed duty officer')"
+                required
+              />
+              {errors.remedialActionTaken && <span className="error-text">{errors.remedialActionTaken}</span>}
+            </div>
+
+            <div className="form-group">
               <label className="form-label">Description of Incident <span className="required">*</span></label>
               <textarea
-                name="reason"
+                name="reason" // This is the 'description'
                 value={formData.reason}
                 onChange={handleChange}
-                className="form-control"
+                className={`form-control ${errors.reason ? 'is-invalid' : ''}`}
                 rows="3"
                 placeholder="Describe how the item was lost (min 10 chars)"
                 required
               />
+              {errors.reason && <span className="error-text">{errors.reason}</span>}
             </div>
             
           </div>

@@ -5,33 +5,25 @@ import { toast } from 'react-toastify';
 const MaintenanceLog = () => {
   const [maintenanceItems, setMaintenanceItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+
+  // 1. Use separate state for each modal
+  const [showRepairModal, setShowRepairModal] = useState(false);
+  const [showWriteOffModal, setShowWriteOffModal] = useState(false);
+  const [showRecoverModal, setShowRecoverModal] = useState(false);
 
   useEffect(() => {
     fetchMaintenanceItems();
   }, []);
 
+  // 2. Fetch from the correct 'maintenance-items' route
   const fetchMaintenanceItems = async () => {
     try {
       setLoading(true);
-      const response = await equipmentAPI.getEquipmentPools();
+      // This route is designed to get all items with status: 'Maintenance'
+      const response = await equipmentAPI.getMaintenanceItems();
       if (response.data.success) {
-        const pools = response.data.data.pools;
-        const itemsToRepair = [];
-
-        pools.forEach(pool => {
-          pool.items.forEach(item => {
-            if (item.status === 'Maintenance') {
-              itemsToRepair.push({
-                ...item,
-                poolId: pool._id,
-                poolName: pool.poolName
-              });
-            }
-          });
-        });
-        setMaintenanceItems(itemsToRepair);
+        setMaintenanceItems(response.data.data.items);
       }
     } catch (error) {
       toast.error('Failed to fetch maintenance list');
@@ -40,19 +32,21 @@ const MaintenanceLog = () => {
     }
   };
 
-  const handleOpenModal = (item) => {
-    setSelectedItem(item);
-    setShowModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setSelectedItem(null);
-    setShowModal(false);
-  };
-
+  // 3. Close all modals and refresh the list
   const handleSuccess = () => {
-    handleCloseModal();
+    setSelectedItem(null);
+    setShowRepairModal(false);
+    setShowWriteOffModal(false);
+    setShowRecoverModal(false);
     fetchMaintenanceItems(); // Refresh the list
+  };
+
+  // 4. Close all modals without refreshing
+  const handleCloseModals = () => {
+    setSelectedItem(null);
+    setShowRepairModal(false);
+    setShowWriteOffModal(false);
+    setShowRecoverModal(false);
   };
 
   if (loading) {
@@ -69,7 +63,7 @@ const MaintenanceLog = () => {
       <div className="maintenance-log">
         <div className="management-header">
           <h3>Maintenance Log</h3>
-          <p>Items currently out of service and awaiting repair.</p>
+          <p>Items currently out of service, awaiting repair, or pending investigation.</p>
         </div>
 
         {maintenanceItems.length === 0 ? (
@@ -84,39 +78,68 @@ const MaintenanceLog = () => {
                   <th>Item ID</th>
                   <th>Pool Name</th>
                   <th>Problem Reported</th>
+                  <th>Status</th>
                   <th>Condition</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {maintenanceItems.map((item) => {
-                  const problemReport = item.maintenanceHistory[item.maintenanceHistory.length - 1];
-                  
-                  // ======== 泙 MODIFIED THIS BLOCK 泙 ========
-                  // The field for the problem is 'reason', not 'description'.
-                  // Removed the prefix-stripping logic as it's not needed.
-                  let reason = problemReport?.reason || 'N/A';
-                  // =======================================
+                  // 5. Check if item is Lost or just for Maintenance
+                  // The backend flags lost items by starting the reason with "ITEM REPORTED LOST"
+                  const lastMaintLog = item.maintenanceHistory[item.maintenanceHistory.length - 1];
+                  const problemReason = lastMaintLog?.reason || 'N/A';
+                  const isLostItem = problemReason.startsWith("ITEM REPORTED LOST");
+
+                  // 6. Get Lost details if they exist
+                  const lostReport = isLostItem && item.lostHistory?.length > 0
+                    ? item.lostHistory[item.lostHistory.length - 1]
+                    : null;
 
                   return (
                     <tr key={item.uniqueId}>
                       <td><strong>{item.uniqueId}</strong></td>
                       <td>{item.poolName}</td>
-                      {/* Use the corrected 'reason' variable */}
-                      <td title={reason}>
-                        {/* Show first 70 chars, or all if shorter */}
-                        {reason.length > 70 ? `${reason.substring(0, 70)}...` : reason}
+                      <td title={problemReason}>
+                        {isLostItem
+                          ? `LOST: FIR #${lostReport?.firNumber || 'N/A'}`
+                          : `${problemReason.substring(0, 70)}...`}
                       </td>
                       <td>
-                        <span className="badge badge-danger">{item.condition}</span>
+                        {isLostItem ? (
+                          <span className="badge badge-danger">Lost (Pending)</span>
+                        ) : (
+                          <span className="badge badge-warning">Maintenance</span>
+                        )}
                       </td>
                       <td>
-                        <button
-                          onClick={() => handleOpenModal(item)}
-                          className="btn btn-sm btn-success"
-                        >
-                          Complete Repair
-                        </button>
+                        <span className="badge badge-secondary">{item.condition}</span>
+                      </td>
+                      <td>
+                        {/* 7. Show different buttons based on item type */}
+                        {isLostItem ? (
+                          <>
+                            <button
+                              onClick={() => { setSelectedItem(item); setShowWriteOffModal(true); }}
+                              className="btn btn-sm btn-danger"
+                            >
+                              Write Off
+                            </button>
+                            <button
+                              onClick={() => { setSelectedItem(item); setShowRecoverModal(true); }}
+                              className="btn btn-sm btn-success"
+                            >
+                              Mark Recovered
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => { setSelectedItem(item); setShowRepairModal(true); }}
+                            className="btn btn-sm btn-success"
+                          >
+                            Complete Repair
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -127,10 +150,27 @@ const MaintenanceLog = () => {
         )}
       </div>
 
-      {showModal && selectedItem && (
+      {/* 8. Render all three possible modals */}
+      {showRepairModal && selectedItem && (
         <CompleteRepairModal
           item={selectedItem}
-          onClose={handleCloseModal}
+          onClose={handleCloseModals}
+          onSuccess={handleSuccess}
+        />
+      )}
+      
+      {showWriteOffModal && selectedItem && (
+        <WriteOffModal
+          item={selectedItem}
+          onClose={handleCloseModals}
+          onSuccess={handleSuccess}
+        />
+      )}
+      
+      {showRecoverModal && selectedItem && (
+        <RecoverItemModal
+          item={selectedItem}
+          onClose={handleCloseModals}
           onSuccess={handleSuccess}
         />
       )}
@@ -138,21 +178,17 @@ const MaintenanceLog = () => {
   );
 };
 
-// --- This is the modal for completing a repair ---
+// --- This is the modal for completing a REPAIR ---
 const CompleteRepairModal = ({ item, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     description: '',
-    condition: 'Good', // Default to Good after repair
+    condition: 'Good',
     cost: ''
   });
   const [loading, setLoading] = useState(false);
 
-  // ======== 泙 MODIFIED THIS BLOCK 泙 ========
-  // Get the original problem report and clean it for display
   const problemReportEntry = item.maintenanceHistory[item.maintenanceHistory.length - 1];
-  // The field is 'reason', not 'description'.
   let problemReason = problemReportEntry?.reason || 'No description provided.';
-  // =======================================
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -170,7 +206,7 @@ const CompleteRepairModal = ({ item, onClose, onSuccess }) => {
       const payload = {
         poolId: item.poolId,
         uniqueId: item.uniqueId,
-        description: formData.description, // This is correct (it's the admin's repair notes)
+        description: formData.description,
         condition: formData.condition,
         cost: formData.cost || 0
       };
@@ -200,7 +236,6 @@ const CompleteRepairModal = ({ item, onClose, onSuccess }) => {
               <textarea
                 className="form-control"
                 rows="3"
-                // Use the corrected 'problemReason' variable
                 value={problemReason}
                 readOnly
               />
@@ -258,5 +293,182 @@ const CompleteRepairModal = ({ item, onClose, onSuccess }) => {
     </div>
   );
 };
+
+
+// --- 9. NEW MODAL for Writing Off a Lost Item ---
+const WriteOffModal = ({ item, onClose, onSuccess }) => {
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const lostReport = item.lostHistory[item.lostHistory.length - 1];
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (notes.length < 10) {
+      toast.error('Please provide final report notes (min 10 chars).');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const payload = {
+        poolId: item.poolId,
+        uniqueId: item.uniqueId,
+        notes: notes,
+      };
+      await equipmentAPI.writeOffLost(payload);
+      toast.success(`Item ${item.uniqueId} has been written off as Lost.`);
+      onSuccess();
+    } catch (error) {
+      toast.error('Failed to write off item.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Write Off Lost Item: {item.uniqueId}</h3>
+          <button onClick={onClose} className="close-btn">&times;</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="form-note form-note-danger">
+              <p><strong>Warning:</strong> This action is final. It will permanently mark the item as 'Lost' and close the investigation.</p>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Officer's Report (Read-only)</label>
+              <textarea
+                className="form-control"
+                rows="4"
+                value={`FIR: ${lostReport.firNumber} on ${new Date(lostReport.firDate).toLocaleDateString()}\nPolice Station: ${lostReport.policeStation}\nIncident: ${lostReport.description}`}
+                readOnly
+              />
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Final Report / Write-Off Notes <span className="required">*</span></label>
+              <textarea
+                name="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="form-control"
+                rows="3"
+                placeholder="e.g., 'Investigation concluded, item unrecoverable. Approved for write-off.'"
+                required
+              />
+            </div>
+          </div>
+          <div className="modal-actions">
+            <button type="button" onClick={onClose} className="btn btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-danger" disabled={loading}>
+              {loading ? 'Saving...' : 'Confirm Write-Off'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// --- 10. NEW MODAL for Marking a Lost Item as Recovered ---
+const RecoverItemModal = ({ item, onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    notes: '',
+    condition: 'Good',
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (formData.notes.length < 5) {
+      toast.error('Please describe how the item was recovered.');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const payload = {
+        poolId: item.poolId,
+        uniqueId: item.uniqueId,
+        notes: formData.notes,
+        condition: formData.condition,
+      };
+
+      await equipmentAPI.markAsRecovered(payload);
+      toast.success(`Item ${item.uniqueId} has been recovered.`);
+      onSuccess();
+    } catch (error) {
+      toast.error('Failed to mark item as recovered.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Mark Item as Recovered: {item.uniqueId}</h3>
+          <button onClick={onClose} className="close-btn">&times;</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            
+            <div className="form-group">
+              <label className="form-label">Recovery Notes <span className="required">*</span></label>
+              <textarea
+                name="notes"
+                value={formData.notes}
+                onChange={handleChange}
+                className="form-control"
+                rows="3"
+                placeholder="e.g., 'Item found during search of Sector 17.'"
+                required
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Current Condition of Item</label>
+              <select
+                name="condition"
+                value={formData.condition}
+                onChange={handleChange}
+                className="form-control"
+              >
+                <option value="Excellent">Excellent</option>
+                <option value="Good">Good</option>
+                <option value="Fair">Fair</option>
+                <option value="Poor">Poor (Will require maintenance)</option>
+              </select>
+            </div>
+
+            <div className="form-note">
+              <p>If condition is 'Excellent', 'Good', or 'Fair', the item will become 'Available'. If 'Poor', it will remain in 'Maintenance' for repair.</p>
+            </div>
+
+          </div>
+          <div className="modal-actions">
+            <button type="button" onClick={onClose} className="btn btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-success" disabled={loading}>
+              {loading ? 'Saving...' : 'Mark as Recovered'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 
 export default MaintenanceLog;
