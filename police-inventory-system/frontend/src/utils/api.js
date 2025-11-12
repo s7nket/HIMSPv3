@@ -220,6 +220,10 @@ export const officerAPI = {
 // ============================================
 
 export const equipmentAPI = {
+
+  getMaintenanceItems: () => {
+    return api.get('/equipment/maintenance-items');
+  },
   // Get all equipment pools
   getEquipmentPools: (params) => {
     console.log('🔄 GET /equipment/pools', params);

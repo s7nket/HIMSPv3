@@ -25,7 +25,7 @@ const requestSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  // ======== 🟢 RENAMED THIS FIELD 🟢 ========
+  // ======== 泙 RENAMED THIS FIELD 泙 ========
   assignedUniqueId: { // Renamed from assignedEquipmentId to match officer.js
     type: String,  // Stores unique ID like "GLK001"
     trim: true
@@ -38,7 +38,8 @@ const requestSchema = new mongoose.Schema({
   
   requestType: {
     type: String,
-    enum: ['Issue', 'Return', 'Maintenance'],
+    // ======== 🟢 MODIFIED THIS LINE 🟢 ========
+    enum: ['Issue', 'Return', 'Maintenance', 'Lost'],
     required: true
   },
   status: {
@@ -67,11 +68,12 @@ const requestSchema = new mongoose.Schema({
     maxlength: [500, 'Reason cannot exceed 500 characters']
   },
 
-  // ======== 🟢 ADDED THIS FIELD 🟢 ========
+  // ======== 泙 ADDED THIS FIELD 泙 ========
   // This was missing, causing the 500 error on return
   condition: {
     type: String,
-    enum: ['Excellent', 'Good', 'Fair', 'Poor', 'Out of Service']
+    // ======== 🟢 MODIFIED THIS LINE 🟢 ========
+    enum: ['Excellent', 'Good', 'Fair', 'Poor', 'Out of Service', 'Lost']
   },
   // =====================================
 
@@ -130,7 +132,7 @@ requestSchema.index({ requestType: 1 });
 requestSchema.index({ createdAt: -1 });
 requestSchema.index({ processedBy: 1 });
 
-// ======== 🛑 DELETED 🛑 ========
+// ======== 尅 DELETED 尅 ========
 // The old, buggy requestSchema.pre('validate', ...) hook has been removed.
 // =================================
 

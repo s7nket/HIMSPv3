@@ -85,6 +85,7 @@ const ReturnEquipment = ({ onEquipmentReturned }) => {
   );
 };
 
+// ======== 🟢 MODIFIED THIS COMPONENT 🟢 ========
 const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
   const isOverdue = equipment.issuedTo.expectedReturnDate && 
     new Date(equipment.issuedTo.expectedReturnDate) < new Date();
@@ -94,6 +95,7 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
   );
   
   const [showMaintModal, setShowMaintModal] = useState(false);
+  const [showLostModal, setShowLostModal] = useState(false); // 1. Added state for new modal
 
   return (
     <>
@@ -123,6 +125,7 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
 
         <div className="equipment-actions">
           <div className="action-buttons-container">
+            {/* 2. Button styles updated for clarity */}
             <button
               onClick={() => onReturn(equipment)}
               className={`btn btn-sm ${isOverdue ? 'btn-danger' : 'btn-warning'}`}
@@ -131,9 +134,16 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
             </button>
             <button
               onClick={() => setShowMaintModal(true)}
-              className="btn btn-sm btn-outline-danger"
+              className="btn btn-sm btn-outline-secondary" // Changed style
             >
               Report Issue
+            </button>
+            {/* 3. Added new "Report Lost" button */}
+            <button
+              onClick={() => setShowLostModal(true)}
+              className="btn btn-sm btn-danger"
+            >
+              Report Lost
             </button>
           </div>
         </div>
@@ -146,7 +156,20 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
           onSuccess={() => {
             setShowMaintModal(false);
             toast.success('Maintenance request submitted successfully!');
-            onRefresh(); // Use onRefresh prop directly
+            onRefresh(); 
+          }}
+        />
+      )}
+
+      {/* 4. Added new LostModal renderer */}
+      {showLostModal && (
+        <LostModal
+          equipment={equipment}
+          onClose={() => setShowLostModal(false)}
+          onSuccess={() => {
+            setShowLostModal(false);
+            toast.success('Lost equipment report submitted successfully!');
+            onRefresh();
           }}
         />
       )}
@@ -154,15 +177,13 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh }) => {
   );
 };
 
+// ======== 🟢 MODIFIED THIS COMPONENT 🟢 ========
 const ReturnModal = ({ equipment, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     reason: '',
     priority: 'Medium',
     condition: equipment?.condition || 'Good',
-    firNumber: '',
-    firDate: '',
-    description: '',
-    documentFile: null
+    // --- FIR fields removed from here ---
   });
 
   const [loading, setLoading] = useState(false);
@@ -172,45 +193,27 @@ const ReturnModal = ({ equipment, onClose, onSuccess }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleFileChange = (e) => {
-    setFormData(prev => ({ ...prev, documentFile: e.target.files[0] }));
-  };
-
+  // 5. Simplified handleSubmit: It now *only* handles "Return"
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
+    if (!formData.reason) {
+      toast.error('Reason for return is required.');
+      setLoading(false);
+      return;
+    }
+
     try {
-      if (formData.condition === 'Lost') {
-        if (!formData.firNumber || !formData.firDate) {
-          toast.error('FIR Number and Date are required for lost weapon report.');
-          setLoading(false);
-          return;
-        }
-
-        const lostData = new FormData();
-        lostData.append('poolId', equipment.poolId);
-        // Use equipment._id as that's what the parent passes
-        lostData.append('uniqueId', equipment._id); 
-        lostData.append('firNumber', formData.firNumber);
-        lostData.append('firDate', formData.firDate);
-        lostData.append('description', formData.description);
-        if (formData.documentFile) lostData.append('documentUrl', formData.documentFile);
-
-        await officerAPI.reportLostWeapon(lostData);
-        toast.success('Lost weapon FIR submitted successfully');
-      } else {
-        await officerAPI.createRequest({
-          poolId: equipment.poolId,
-          // Use equipment._id as that's what the parent passes
-          uniqueId: equipment._id,
-          requestType: 'Return',
-          reason: formData.reason,
-          priority: formData.priority,
-          condition: formData.condition
-        });
-        toast.success('Return request submitted successfully');
-      }
+      await officerAPI.createRequest({
+        poolId: equipment.poolId,
+        uniqueId: equipment._id, // Use equipment._id as that's what the parent passes
+        requestType: 'Return', // Hardcoded as "Return"
+        reason: formData.reason,
+        priority: formData.priority,
+        condition: formData.condition
+      });
+      toast.success('Return request submitted successfully');
 
       onSuccess?.();
       onClose?.();
@@ -238,7 +241,7 @@ const ReturnModal = ({ equipment, onClose, onSuccess }) => {
               value={formData.reason}
               onChange={handleChange}
               placeholder="Enter reason for returning equipment"
-              required={formData.condition !== 'Lost'}
+              required
             />
           </div>
     
@@ -254,25 +257,16 @@ const ReturnModal = ({ equipment, onClose, onSuccess }) => {
     
           <div className="form-group">
             <label>Condition</label>
+            {/* 6. "Lost" option removed from dropdown */}
             <select name="condition" value={formData.condition} onChange={handleChange}>
               <option>Excellent</option>
               <option>Good</option>
               <option>Fair</option>
               <option>Poor</option>
-              <option>Lost</option>
             </select>
           </div>
     
-          {/* 🔹 FIR section appears only when "Lost" is selected */}
-          {formData.condition === 'Lost' && (
-            <div className="lost-fir-section">
-              <h4>Lost Weapon FIR Details</h4>
-              <input type="text" name="firNumber" placeholder="FIR Number (e.g., 123/2025)" value={formData.firNumber} onChange={handleChange} required />
-              <input type="date" name="firDate" value={formData.firDate} onChange={handleChange} required />
-              <textarea name="description" placeholder="Brief description of the loss" value={formData.description} onChange={handleChange}></textarea>
-              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileChange} />
-            </div>
-          )}
+          {/* 7. FIR section removed from this modal */}
           
           <div className="modal-actions">
             <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
@@ -285,7 +279,6 @@ const ReturnModal = ({ equipment, onClose, onSuccess }) => {
 };
 
 
-// ======== 🟢 THIS COMPONENT IS FIXED 🟢 ========
 const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     reason: '', // This is the "problem description"
@@ -295,8 +288,6 @@ const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
-    // ======== 泙 THIS IS THE FIX 泙 ========
-    // It was 'e.g.target.name', corrected to 'e.target.name'
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -389,6 +380,124 @@ const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
             </button>
             <button type="submit" className="btn btn-danger" disabled={loading}>
               {loading ? 'Submitting...' : 'Submit Maintenance Request'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ======== 🟢 8. NEW COMPONENT ADDED 🟢 ========
+const LostModal = ({ equipment, onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    reason: '', // This is the "description"
+    firNumber: '',
+    firDate: '',
+    condition: 'Lost', // Hardcoded
+    priority: 'Urgent' // Hardcoded
+  });
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.firNumber || !formData.firDate) {
+      toast.error('FIR Number and Date are required.');
+      return;
+    }
+    if (formData.reason.length < 10) {
+      toast.error('Please describe the incident (min 10 chars).');
+      return;
+    }
+    setLoading(true);
+
+    try {
+      await officerAPI.createRequest({
+        poolId: equipment.poolId,
+        uniqueId: equipment._id,
+        requestType: 'Lost',
+        reason: formData.reason, // This is the description
+        priority: formData.priority,
+        condition: formData.condition,
+        firNumber: formData.firNumber,
+        firDate: formData.firDate
+      });
+      onSuccess(); // Will show toast in parent
+    } catch (error) {
+      toast.error('Failed to submit lost report');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Report Lost Item: {equipment.name}</h3>
+          <button onClick={onClose} className="close-btn">&times;</button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="equipment-summary">
+              <p>{equipment.model} - ID: {equipment.serialNumber}</p>
+            </div>
+
+            <div className="form-note form-note-danger">
+              <p><strong>Warning:</strong> Reporting an item as lost is a serious matter and will require an official investigation.</p>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">FIR Number <span className="required">*</span></label>
+                <input
+                  type="text"
+                  name="firNumber"
+                  value={formData.firNumber}
+                  onChange={handleChange}
+                  className="form-control"
+                  placeholder="e.g., 123/2025"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">FIR Date <span className="required">*</span></label>
+                <input
+                  type="date"
+                  name="firDate"
+                  value={formData.firDate}
+                  onChange={handleChange}
+                  className="form-control"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label">Description of Incident <span className="required">*</span></label>
+              <textarea
+                name="reason"
+                value={formData.reason}
+                onChange={handleChange}
+                className="form-control"
+                rows="3"
+                placeholder="Describe how the item was lost (min 10 chars)"
+                required
+              />
+            </div>
+            
+          </div>
+          <div className="modal-actions">
+            <button type="button" onClick={onClose} className="btn btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-danger" disabled={loading}>
+              {loading ? 'Submitting...' : 'Submit Lost Report'}
             </button>
           </div>
         </form>

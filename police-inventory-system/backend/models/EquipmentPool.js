@@ -90,6 +90,20 @@ const equipmentPoolSchema = new mongoose.Schema({
     default: 0,
     min: [0, 'Damaged count cannot be negative']
   },
+
+  // ======== 🟢 1. ADDED THESE FIELDS 🟢 ========
+  lostCount: {
+    type: Number,
+    default: 0,
+    min: [0, 'Lost count cannot be negative']
+  },
+
+  retiredCount: {
+    type: Number,
+    default: 0,
+    min: [0, 'Retired count cannot be negative']
+  },
+  // ==========================================
   
   // Individual Items in Pool
   items: [{
@@ -107,7 +121,8 @@ const equipmentPoolSchema = new mongoose.Schema({
     
     condition: {
       type: String,
-      enum: ['Excellent', 'Good', 'Fair', 'Poor'],
+      // ======== 🟢 2. UPDATED THIS ENUM 🟢 ========
+      enum: ['Excellent', 'Good', 'Fair', 'Poor', 'Out of Service', 'Lost'],
       default: 'Good'
     },
     
@@ -158,11 +173,13 @@ const equipmentPoolSchema = new mongoose.Schema({
       purpose: String,
       conditionAtIssue: {
         type: String,
-        enum: ['Excellent', 'Good', 'Fair', 'Poor']
+        // ======== 🟢 3. UPDATED THIS ENUM 🟢 ========
+        enum: ['Excellent', 'Good', 'Fair', 'Poor', 'Out of Service']
       },
       conditionAtReturn: {
         type: String,
-        enum: ['Excellent', 'Good', 'Fair', 'Poor']
+        // ======== 🟢 4. UPDATED THIS ENUM 🟢 ========
+        enum: ['Excellent', 'Good', 'Fair', 'Poor', 'Out of Service', 'Lost']
       },
       remarks: String,
       issuedBy: {
@@ -175,24 +192,31 @@ const equipmentPoolSchema = new mongoose.Schema({
       }
     }],
 
-       // 隼 NEW: Lost weapon FIR tracking
+    // Lost weapon FIR tracking
     lostHistory: [{
       reportedDate: { type: Date, default: Date.now },
       reportedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
       firNumber: { type: String, required: true },
       firDate: { type: Date, required: true },
-        description: String,
-        documentUrl: String,
+      // ======== 🟢 ADDED NEW FIELDS HERE 🟢 ========
+      policeStation: { type: String },
+      dateOfLoss: { type: Date },
+      placeOfLoss: { type: String },
+      dutyAtTimeOfLoss: { type: String },
+      description: String, // This is the 'incident details'
+      remedialActionTaken: { type: String },
+      witnesses: { type: String },
+      documentUrl: String,
+      // ==========================================
       status: {
         type: String,
         enum: ['Under Investigation', 'Closed'],
         default: 'Under Investigation'
-    }
-  }],
+      }
+    }],
     
     // Maintenance History for THIS Item
     maintenanceHistory: [{
-      // ======== 泙 MODIFIED THIS ENTIRE BLOCK 泙 ========
       reportedDate: {
         type: Date,
         required: true
@@ -225,7 +249,6 @@ const equipmentPoolSchema = new mongoose.Schema({
         min: 0
       },
       nextMaintenanceDate: Date
-      // ===============================================
     }],
     
     // Item-specific dates
@@ -268,25 +291,15 @@ const equipmentPoolSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes for better performance
+// Indexes
 equipmentPoolSchema.index({ poolName: 1 });
 equipmentPoolSchema.index({ category: 1 });
-equipmentPoolSchema.index({ authorizedDesignations: 1 });
 equipmentPoolSchema.index({ 'items.uniqueId': 1 });
 equipmentPoolSchema.index({ 'items.status': 1 });
 equipmentPoolSchema.index({ 'items.currentlyIssuedTo.userId': 1 });
-equipmentPoolSchema.index({ 'items.currentlyIssuedTo.officerId': 1 });
 
-// Method to generate unique IDs for items
-equipmentPoolSchema.methods.generateUniqueIds = function(prefix, startFrom, count) {
-  const ids = [];
-  for (let i = 0; i < count; i++) {
-    const num = (startFrom + i).toString().padStart(3, '0');
-    ids.push(`${prefix}${num}`);
-  }
-  return ids;
-};
 
+// ======== 🟢 5. UPDATED THIS METHOD 🟢 ========
 // Method to update counts
 equipmentPoolSchema.methods.updateCounts = function() {
   const items = this.items || [];
@@ -294,7 +307,10 @@ equipmentPoolSchema.methods.updateCounts = function() {
   this.issuedCount = items.filter(item => item.status === 'Issued').length;
   this.maintenanceCount = items.filter(item => item.status === 'Maintenance').length;
   this.damagedCount = items.filter(item => item.status === 'Damaged').length;
+  this.lostCount = items.filter(item => item.status === 'Lost').length;
+  this.retiredCount = items.filter(item => item.status === 'Retired').length;
 };
+// ============================================
 
 // Method to get next available item (Prioritizes by condition)
 equipmentPoolSchema.methods.getNextAvailableItem = function() {
@@ -352,18 +368,11 @@ equipmentPoolSchema.methods.issueItem = async function(userId, officerId, office
   });
   
   this.updateCounts();
-  
-  // ======== 泙 THIS IS THE FIX 泙 ========
-  // We skip validation because other items in the pool might
-  // have corrupt data that would cause the save to fail.
   await this.save({ validateBeforeSave: false });
-  // ===================================
-
   return availableItem;
 };
 
 // Method to return item to pool
-// ======== 泙 REPLACED THIS ENTIRE METHOD 泙 ========
 equipmentPoolSchema.methods.returnItem = async function(uniqueId, condition, remarks, returnedTo) {
   const item = this.findItemByUniqueId(uniqueId);
   
@@ -381,7 +390,7 @@ equipmentPoolSchema.methods.returnItem = async function(uniqueId, condition, rem
   const latestHistory = item.usageHistory[item.usageHistory.length - 1];
   latestHistory.returnedDate = new Date();
   latestHistory.conditionAtReturn = finalCondition;
-  latestHistory.remarks = remarks || ''; // This saves the officer's return reason
+  latestHistory.remarks = remarks || '';
   latestHistory.returnedTo = returnedTo;
   
   const issuedDate = new Date(latestHistory.issuedDate);
@@ -398,7 +407,7 @@ equipmentPoolSchema.methods.returnItem = async function(uniqueId, condition, rem
     // Auto-create a maintenance log entry
     item.maintenanceHistory.push({
       reportedDate: new Date(),
-      reportedBy: latestHistory.userId, // The officer who returned it
+      reportedBy: latestHistory.userId,
       reason: `Item returned in ${finalCondition} condition. Reason: ${remarks || 'N/A'}.`,
       type: 'Inspection',
       action: 'Awaiting repair...',
@@ -411,13 +420,7 @@ equipmentPoolSchema.methods.returnItem = async function(uniqueId, condition, rem
   }
 
   this.updateCounts();
-  
-  // ======== 泙 THIS IS THE FIX 泙 ========
-  // We skip validation because other items in the pool might
-  // have corrupt data that would cause the save to fail.
   await this.save({ validateBeforeSave: false });
-  // ===================================
-  
   return item;
 };
 

@@ -11,16 +11,11 @@ const router = express.Router();
 // Apply auth middleware to all routes
 router.use(auth);
 
-// Apply auth middleware to all routes
-router.use(auth);
-
 // ============================================
 // EQUIPMENT POOL ROUTES
 // ============================================
 
 // @route GET /api/equipment/pools
-// @desc Get all equipment pools with filters
-// @access Private (Admin only)
 router.get('/pools', adminOnly, async (req, res) => {
   try {
     const { category, designation, search } = req.query;
@@ -61,8 +56,6 @@ router.get('/pools', adminOnly, async (req, res) => {
 });
 
 // @route GET /api/equipment/authorized-pools
-// @desc Get equipment pools authorized for the logged-in officer
-// @access Private
 router.get('/authorized-pools', async (req, res) => {
   try {
     const { category, search } = req.query;
@@ -103,8 +96,6 @@ router.get('/authorized-pools', async (req, res) => {
 });
 
 // @route GET /api/equipment/pools/by-designation
-// @desc Get equipment pools authorized for specific designation
-// @access Private
 router.get('/pools/by-designation', async (req, res) => {
   try {
     const designation = req.query.designation || req.user.designation;
@@ -134,8 +125,6 @@ router.get('/pools/by-designation', async (req, res) => {
 });
 
 // @route POST /api/equipment/pools
-// @desc Create new equipment pool
-// @access Private (Admin only)
 router.post('/pools', adminOnly, [
   body('poolName').trim().isLength({ min: 1 }).withMessage('Pool name is required'),
   body('category').isIn([
@@ -181,10 +170,9 @@ router.post('/pools', adminOnly, [
       addedBy: req.user._id
     });
     
-    // Generate items with unique IDs
     for (let i = 0; i < totalQuantity; i++) {
       const num = (i + 1).toString().padStart(3, '0');
-      const uniqueId = `${prefix}-${num}`; // Added hyphen for clarity
+      const uniqueId = `${prefix}-${num}`; 
       
       pool.items.push({
         uniqueId,
@@ -216,11 +204,8 @@ router.post('/pools', adminOnly, [
 });
 
 // @route GET /api/equipment/pools/:poolId
-// @desc Get specific pool details
-// @access Private
 router.get('/pools/:poolId', async (req, res) => {
   try {
-    // 1. Find the pool *without* deep populates
     const pool = await EquipmentPool.findById(req.params.poolId);
     
     if (!pool) {
@@ -230,7 +215,6 @@ router.get('/pools/:poolId', async (req, res) => {
       });
     }
 
-    // 2. Populate all nested fields on the retrieved document
     await pool.populate([
       { path: 'addedBy', select: 'fullName officerId' },
       { path: 'items.currentlyIssuedTo.userId', select: 'fullName officerId designation' },
@@ -239,7 +223,7 @@ router.get('/pools/:poolId', async (req, res) => {
       { path: 'items.maintenanceHistory.fixedBy', select: 'fullName officerId' }
     ]);
         
-    pool.updateCounts(); // This line was already here
+    pool.updateCounts();
     
     res.json({
       success: true,
@@ -256,8 +240,6 @@ router.get('/pools/:poolId', async (req, res) => {
 });
 
 // @route POST /api/equipment/pools/:poolId/issue
-// @desc Issue equipment from pool
-// @access Private (Admin only)
 router.post('/pools/:poolId/issue', adminOnly, [
   body('userId').isMongoId().withMessage('Valid user ID is required'),
   body('purpose').optional().trim()
@@ -320,8 +302,6 @@ router.post('/pools/:poolId/issue', adminOnly, [
 });
 
 // @route POST /api/equipment/pools/:poolId/return
-// @desc Return equipment to pool
-// @access Private (Admin only)
 router.post('/pools/:poolId/return', adminOnly, [
   body('uniqueId').trim().isLength({ min: 1 }).withMessage('Unique ID is required'),
   body('condition').isIn(['Excellent', 'Good', 'Fair', 'Poor']).withMessage('Valid condition is required'),
@@ -375,40 +355,22 @@ router.post('/pools/:poolId/return', adminOnly, [
 });
 
 // @route   GET /api/equipment/pools/:poolId/items/:uniqueId/history
-// @desc    Get complete history of specific item
 router.get('/pools/:poolId/items/:uniqueId/history', auth, async (req, res) => {
   try {
     const { poolId, uniqueId } = req.params;
 
-    // 1. Find the pool *without* the problematic deep populates
     const pool = await EquipmentPool.findById(poolId);
     
     if (!pool) {
       return res.status(404).json({ success: false, message: 'Equipment pool not found' });
     }
 
-    // 2. Now, populate the nested fields on the retrieved document.
     await pool.populate([
-      {
-        path: 'items.usageHistory.userId',
-        select: 'fullName officerId'
-      },
-      {
-        path: 'items.usageHistory.issuedBy',
-        select: 'fullName officerId'
-      },
-      {
-        path: 'items.usageHistory.returnedTo',
-        select: 'fullName officerId'
-      },
-      {
-        path: 'items.maintenanceHistory.reportedBy',
-        select: 'fullName officerId'
-      },
-      {
-        path: 'items.maintenanceHistory.fixedBy',
-        select: 'fullName officerId'
-      }
+      { path: 'items.usageHistory.userId', select: 'fullName officerId' },
+      { path: 'items.usageHistory.issuedBy', select: 'fullName officerId' },
+      { path: 'items.usageHistory.returnedTo', select: 'fullName officerId' },
+      { path: 'items.maintenanceHistory.reportedBy', select: 'fullName officerId' },
+      { path: 'items.maintenanceHistory.fixedBy', select: 'fullName officerId' }
     ]);
 
     const item = pool.findItemByUniqueId(uniqueId);
@@ -416,7 +378,6 @@ router.get('/pools/:poolId/items/:uniqueId/history', auth, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Item not found in pool' });
     }
 
-    // Send the two separate, sorted arrays
     const usageHistory = item.usageHistory.sort((a, b) => new Date(b.issuedDate) - new Date(a.issuedDate));
     const maintenanceHistory = item.maintenanceHistory.sort((a, b) => new Date(b.reportedDate) - new Date(a.reportedDate));
 
@@ -442,8 +403,6 @@ router.get('/pools/:poolId/items/:uniqueId/history', auth, async (req, res) => {
 });
 
 // @route GET /api/equipment/my-equipment-history
-// @desc Get equipment history for logged-in officer
-// @access Private
 router.get('/my-equipment-history', async (req, res) => {
   try {
     const pools = await EquipmentPool.find({
@@ -485,8 +444,6 @@ router.get('/my-equipment-history', async (req, res) => {
 });
 
 // @route GET /api/equipment/currently-issued
-// @desc Get all currently issued equipment
-// @access Private (Admin only)
 router.get('/currently-issued', adminOnly, async (req, res) => {
   try {
     const pools = await EquipmentPool.find()
@@ -526,9 +483,64 @@ router.get('/currently-issued', adminOnly, async (req, res) => {
   }
 });
 
+
+// ======== 🟢 1. THIS IS THE NEW ROUTE TO FIX THE BUG 🟢 ========
+// @route   GET /api/equipment/maintenance-items
+// @desc    Get all items marked as 'Maintenance'
+// @access  Private (Admin only)
+router.get('/maintenance-items', adminOnly, async (req, res) => {
+  try {
+    // This aggregation pipeline is the fix.
+    // It finds all pools, unwinds the items,
+    // matches *only* items in Maintenance,
+    // and projects them as a flat array, including their full history.
+    const maintenanceItems = await EquipmentPool.aggregate([
+      { $unwind: '$items' },
+      { $match: { 'items.status': 'Maintenance' } },
+      {
+        $project: {
+          _id: 0,
+          poolId: '$_id',
+          poolName: '$poolName',
+          model: '$model',
+          category: '$category',
+          
+          // Project the *entire* item sub-document
+          uniqueId: '$items.uniqueId',
+          status: '$items.status',
+          condition: '$items.condition',
+          location: '$items.location',
+          usageHistory: '$items.usageHistory',
+          lostHistory: '$items.lostHistory', // <-- This is the key
+          maintenanceHistory: '$items.maintenanceHistory'
+        }
+      },
+      {
+        $addFields: {
+          // Add a sortable date field from the last maintenance log
+          lastLogDate: { $max: '$maintenanceHistory.reportedDate' }
+        }
+      },
+      { $sort: { lastLogDate: -1 } }
+    ]);
+
+    res.json({
+      success: true,
+      data: { items: maintenanceItems }
+    });
+
+  } catch (error) {
+    console.error('Get maintenance items error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching maintenance items'
+    });
+  }
+});
+// =========================================================
+
+
 // @route DELETE /api/equipment/pools/:poolId
-// @desc Delete equipment pool
-// @access Private (Admin only)
 router.delete('/pools/:poolId', adminOnly, async (req, res) => {
   try {
     const pool = await EquipmentPool.findByIdAndDelete(req.params.poolId);
@@ -555,12 +567,10 @@ router.delete('/pools/:poolId', adminOnly, async (req, res) => {
 });
 
 // @route   POST /api/equipment/pools/complete-maintenance
-// @desc    Mark an item as repaired and available
-// @access  Private (Admin only)
 router.post('/pools/complete-maintenance', adminOnly, [
   body('poolId').isMongoId(),
   body('uniqueId').notEmpty(),
-  body('description').notEmpty().withMessage('Repair action description is required'), // This is the "action"
+  body('description').notEmpty().withMessage('Repair action description is required'), 
   body('condition').isIn(['Excellent', 'Good']).withMessage('Final condition must be Excellent or Good'),
   body('cost').optional().isNumeric()
 ], async (req, res) => {
@@ -586,25 +596,22 @@ router.post('/pools/complete-maintenance', adminOnly, [
       return res.status(400).json({ success: false, message: 'Item is not currently under maintenance' });
     }
     
-    // 1. Update the item's status
     item.status = 'Available';
     item.condition = condition;
 
-    // 2. Find the "Pending" log entry and update it
     let logEntry = item.maintenanceHistory.find(
       (entry) => !entry.fixedBy
     );
     
     if (logEntry) {
       logEntry.fixedDate = new Date();
-      logEntry.action = description; // The admin's repair notes
-      logEntry.fixedBy = req.user._id; // The admin who fixed it
+      logEntry.action = description;
+      logEntry.fixedBy = req.user._id;
       logEntry.cost = cost;
     } else {
-      // Fallback if no pending entry was found
       item.maintenanceHistory.push({
         reportedDate: new Date(),
-        reportedBy: req.user._id, // <-- This line was missing
+        reportedBy: req.user._id,
         reason: 'Repair completed (no initial report found)',
         type: 'Repair',
         fixedDate: new Date(),
@@ -614,11 +621,9 @@ router.post('/pools/complete-maintenance', adminOnly, [
       });
     }
 
-    // 3. Save changes
     pool.updateCounts();
-    await pool.save();
+    await pool.save({ validateBeforeSave: false });
 
-    // 4. Update the original 'Maintenance' request status to 'Completed'
     await Request.findOneAndUpdate(
       { assignedUniqueId: uniqueId, status: 'Approved', requestType: 'Maintenance' },
       { status: 'Completed', completedDate: new Date() }
@@ -632,14 +637,121 @@ router.post('/pools/complete-maintenance', adminOnly, [
 
   } catch (error) {
     console.error('Complete maintenance error:', error);
-    // ======== 泙 THIS IS THE FIX 泙 ========
-    // Changed the invalid status code to '500'
     res.status(500).json({
       success: false,
       message: 'Server error completing maintenance'
     });
-    // ===================================
   }
 });
+
+
+// @route   POST /api/equipment/pools/mark-recovered
+router.post('/pools/mark-recovered', adminOnly, [
+  body('poolId').isMongoId(),
+  body('uniqueId').notEmpty(),
+  body('notes').notEmpty().withMessage('Recovery notes are required'),
+  body('condition').isIn(['Excellent', 'Good', 'Fair', 'Poor']).withMessage('Valid condition is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    
+    const { poolId, uniqueId, notes, condition } = req.body;
+    
+    const pool = await EquipmentPool.findById(poolId);
+    if (!pool) return res.status(404).json({ success: false, message: 'Pool not found' });
+    
+    const item = pool.findItemByUniqueId(uniqueId);
+    if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+    
+    if (item.status !== 'Maintenance') {
+      return res.status(400).json({ success: false, message: 'Item is not in maintenance (lost) status' });
+    }
+    
+    item.condition = condition;
+    if (condition === 'Poor') {
+      item.status = 'Maintenance'; // Stays in maintenance if recovered in poor state
+    } else {
+      item.status = 'Available'; // Becomes available
+    }
+
+    let maintLog = item.maintenanceHistory.find(entry => !entry.fixedBy && entry.reason.startsWith("ITEM REPORTED LOST"));
+    if (maintLog) {
+      maintLog.fixedDate = new Date();
+      maintLog.fixedBy = req.user._id;
+      maintLog.action = `ITEM RECOVERED. Status: ${item.status}. Notes: ${notes}`;
+    }
+    
+    let lostLog = item.lostHistory.find(entry => entry.status === 'Under Investigation');
+    if (lostLog) {
+      lostLog.status = 'Closed';
+      lostLog.description = (lostLog.description || '') + ` | RECOVERY NOTES: ${notes}`;
+    }
+    
+    pool.updateCounts();
+    await pool.save({ validateBeforeSave: false });
+    
+    res.json({ success: true, message: `Item ${uniqueId} marked as recovered.` });
+
+  } catch (error) {
+    console.error('Mark recovered error:', error);
+    res.status(500).json({ success: false, message: 'Server error marking item as recovered' });
+  }
+});
+
+
+// @route   POST /api/equipment/pools/write-off-lost
+router.post('/pools/write-off-lost', adminOnly, [
+  body('poolId').isMongoId(),
+  body('uniqueId').notEmpty(),
+  body('notes').notEmpty().withMessage('Final report notes are required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+    
+    const { poolId, uniqueId, notes } = req.body;
+    
+    const pool = await EquipmentPool.findById(poolId);
+    if (!pool) return res.status(404).json({ success: false, message: 'Pool not found' });
+    
+    const item = pool.findItemByUniqueId(uniqueId);
+    if (!item) return res.status(404).json({ success: false, message: 'Item not found' });
+    
+    if (item.status !== 'Maintenance') {
+      return res.status(400).json({ success: false, message: 'Item is not in maintenance (lost) status' });
+    }
+
+    item.status = 'Lost';
+    item.condition = 'Out of Service'; 
+    
+    let maintLog = item.maintenanceHistory.find(entry => !entry.fixedBy && entry.reason.startsWith("ITEM REPORTED LOST"));
+    if (maintLog) {
+      maintLog.fixedDate = new Date();
+      maintLog.fixedBy = req.user._id;
+      maintLog.action = `ITEM WRITTEN OFF. Status: Lost. Final Report: ${notes}`;
+    }
+    
+    let lostLog = item.lostHistory.find(entry => entry.status === 'Under Investigation');
+    if (lostLog) {
+      lostLog.status = 'Closed';
+      lostLog.description = (lostLog.description || '') + ` | FINAL REPORT: ${notes}`;
+    }
+    
+    pool.updateCounts();
+    await pool.save({ validateBeforeSave: false });
+    
+    res.json({ success: true, message: `Item ${uniqueId} has been written off as Lost.` });
+
+  } catch (error) {
+    console.error('Write-off lost error:', error);
+    res.status(500).json({ success: false, message: 'Server error writing off item' });
+  }
+});
+
 
 module.exports = router;

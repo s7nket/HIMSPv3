@@ -96,6 +96,9 @@ const ProcessRequests = () => {
               <option value="Issue">Issue</option>
               <option value="Return">Return</option>
               <option value="Maintenance">Maintenance</option>
+              {/* ======== 🟢 ADDED THIS LINE 🟢 ======== */}
+              <option value="Lost">Lost</option>
+              {/* ======================================= */}
             </select>
           </div>
         </div>

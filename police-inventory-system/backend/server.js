@@ -96,13 +96,40 @@ app.use('*', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 API Base URL: http://localhost:${PORT}/api`);
-  console.log(`🏠 Frontend URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}`);
-  console.log(`🔓 Rate Limiting: DISABLED FOR DEVELOPMENT`);
-});
+const getInitialPort = () => {
+  const parsed = parseInt(process.env.PORT, 10);
+  return Number.isFinite(parsed) ? parsed : 5000;
+};
+
+const startServer = (port, remainingRetries = 5) => {
+  const server = app.listen(port);
+
+  server.on('listening', () => {
+    const { port: activePort } = server.address();
+    console.log(`🚀 Server running on port ${activePort}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔗 API Base URL: http://localhost:${activePort}/api`);
+    console.log(`🏠 Frontend URL: ${process.env.CLIENT_URL || 'http://localhost:3000'}`);
+    console.log(`🔓 Rate Limiting: DISABLED FOR DEVELOPMENT`);
+  });
+
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE' && remainingRetries > 0) {
+      const nextPort = port + 1;
+      console.warn(`⚠️  Port ${port} is already in use. Attempting to use port ${nextPort} (${remainingRetries - 1} retries left).`);
+      setTimeout(() => startServer(nextPort, remainingRetries - 1), 500);
+      return;
+    }
+
+    if (error.code === 'EADDRINUSE') {
+      console.error(`❌ All fallback attempts failed. Please free port ${port} or set the PORT environment variable.`);
+    } else {
+      console.error('❌ Server failed to start:', error);
+    }
+    process.exit(1);
+  });
+};
+
+startServer(getInitialPort());
 
 module.exports = app;

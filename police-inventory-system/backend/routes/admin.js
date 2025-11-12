@@ -583,6 +583,88 @@ router.put('/requests/:id/approve', [
       }
     }
 
+    // ======== 🟢 ADD THIS ENTIRE BLOCK 🟢 ========
+    // --- Logic for LOST requests ---
+    if (request.requestType === 'Lost') {
+      if (request.poolId && request.assignedUniqueId) {
+        
+        const pool = await EquipmentPool.findById(request.poolId);
+        if (!pool) {
+           return res.status(404).json({ success: false, message: 'Pool not found for this item' });
+        }
+        
+        const item = pool.findItemByUniqueId(request.assignedUniqueId);
+        if (!item) {
+          return res.status(404).json({ success: false, message: 'Item not found in pool' });
+        }
+
+        // 1. Find and close out the officer's "Issued" record in usageHistory
+        const lastUsage = item.usageHistory.find(
+          (h) => h.returnedDate === undefined
+        );
+        
+        const lostReason = `Reported as Lost. FIR: ${request.firNumber || 'N/A'}. ${request.reason}`;
+
+        if (lastUsage) {
+          lastUsage.returnedDate = new Date();
+          lastUsage.returnedTo = req.user._id; // The admin
+          lastUsage.conditionAtReturn = 'Poor'; // Mark as poor
+          lastUsage.remarks = lostReason;
+        }
+        
+        // 2. Set item status to 'Maintenance' (as requested, to appear in Maintenance Log)
+        item.status = 'Maintenance';
+        item.condition = 'Out of Service'; // This is a fitting condition
+        
+        // 3. Add the official 'lostHistory' log entry
+        item.lostHistory.push({
+          reportedDate: new Date(),
+          reportedBy: request.requestedBy._id,
+          firNumber: request.firNumber,
+          firDate: request.firDate,
+          description: request.reason, // Officer's description of loss
+          status: 'Under Investigation'
+        });
+
+        // 4. Add a 'maintenanceHistory' entry so it appears correctly in the log
+        item.maintenanceHistory.push({
+          reportedDate: new Date(),
+          reportedBy: request.requestedBy._id,
+          reason: `ITEM REPORTED LOST. FIR: ${request.firNumber || 'N/A'}. ${request.reason || ''}`,
+          type: 'Repair', // 'Repair' is a good type
+          action: 'Awaiting investigation / write-off...',
+          fixedBy: null
+        });
+        
+        // 5. Clear the item from the officer's possession
+        item.currentlyIssuedTo = undefined;
+        
+        pool.updateCounts();
+        
+        // 6. Save the pool
+        await pool.save({ validateBeforeSave: false });
+
+        // 7. Update the OfficerHistory log
+        try {
+          await OfficerHistory.updateOne(
+            { "history.itemUniqueId": request.assignedUniqueId, "history.status": "Pending Return" },
+            { 
+              $set: { 
+                "history.$.status": "Completed", 
+                "history.$.returnedDate": new Date(),
+                "history.$.returnedTo": req.user._id,
+                "history.$.conditionAtReturn": 'Poor', // or 'Lost'
+                "history.$.remarks": lostReason
+              }
+            }
+          );
+        } catch (historyError) {
+          console.error('Failed to update officer history on lost:', historyError);
+        }
+      }
+    }
+    // ===============================================
+
     // 7. Approve the original request
     await request.approve(req.user._id, notes);
     
