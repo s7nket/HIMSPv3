@@ -2,29 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { adminAPI } from '../../utils/api';
 import { toast } from 'react-toastify';
 
-/*
-  UI/UX Enhancement: This component was previously unstyled.
-  The AdminDashboard.css file now includes new styles for:
-  - .reports-page
-  - .reports-header (a themed card for filters)
-  - .date-filters, .form-group, .form-label
-  - .reports-content (a grid for report sections)
-  - .report-section (themed cards for each report)
-  - .summary-grid and .summary-card
-  - .officers-table (applies standard table styling)
-*/
-
 const ReportsPage = () => {
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // ======== 🟢 1. GET TODAY'S DATE FOR VALIDATION 🟢 ========
+  const today = new Date().toISOString().split('T')[0];
+
   const [dateRange, setDateRange] = useState({
     startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+    endDate: today
   });
 
   useEffect(() => {
     fetchReports();
-  }, [dateRange]);
+  }, []); // Only fetch on initial load
 
   const fetchReports = async () => {
     try {
@@ -48,9 +40,12 @@ const ReportsPage = () => {
     });
   };
 
+  const handleGenerateReport = () => {
+    fetchReports();
+  };
+
   if (loading) {
     return (
-      /* UI/UX Enhancement: Styled by .loading-container from CSS */
       <div className="loading-container">
         <div className="spinner"></div>
         <p>Loading reports...</p>
@@ -59,95 +54,85 @@ const ReportsPage = () => {
   }
 
   return (
-    <div className="reports-page">
-      {/* UI/UX Enhancement: This header is now a styled card */}
-      <div className="reports-header">
-        <div className="date-filters">
-          <div className="form-group">
-            <label className="form-label">Start Date</label>
+    <div className="um-container">
+      <div className="um-header">
+        <h2>Reports</h2>
+      </div>
+
+      <div className="um-controls" style={{ justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: '16px' }}>
+          <div className="um-form-group" style={{ marginBottom: 0 }}>
+            <label className="um-form-label">Start Date</label>
             <input
               type="date"
               name="startDate"
               value={dateRange.startDate}
               onChange={handleDateChange}
               className="form-control"
+              // ======== 🟢 2. ADDED VALIDATION 🟢 ========
+              max={dateRange.endDate || today} // Cannot be after end date or today
             />
           </div>
-          <div className="form-group">
-            <label className="form-label">End Date</label>
+          <div className="um-form-group" style={{ marginBottom: 0 }}>
+            <label className="um-form-label">End Date</label>
             <input
               type="date"
               name="endDate"
               value={dateRange.endDate}
               onChange={handleDateChange}
               className="form-control"
+              // ======== 🟢 3. ADDED VALIDATION 🟢 ========
+              min={dateRange.startDate} // Cannot be before start date
+              max={today} // Cannot be in the future
             />
           </div>
         </div>
         <button
-          onClick={fetchReports}
+          onClick={handleGenerateReport}
           className="btn btn-primary"
+          style={{ alignSelf: 'flex-end' }}
         >
           Generate Report
         </button>
       </div>
 
       {reportData && (
-        /* UI/UX Enhancement: Report sections are now styled cards */
-        <div className="reports-content">
-          <div className="report-section">
+        <div className="um-modal-form"> {/* Re-using modal form padding */}
+          <div className="um-form-section">
             <h3>Requests Summary</h3>
-            <div className="summary-grid">
+            <div className="um-stats-grid">
               {reportData.requestsSummary.map((item) => (
-                <div key={item._id} className="summary-card">
-                  <div className="summary-label">{item._id}</div>
-                  <div className="summary-value">{item.count}</div>
+                <div key={item._id} className="um-stat-item">
+                  <span>{item._id}</span>
+                  <strong>{item.count}</strong>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="report-section">
+          <div className="um-form-section">
             <h3>Equipment Status</h3>
-            <div className="summary-grid">
+            <div className="um-stats-grid">
               {reportData.equipmentSummary.map((item) => (
-                <div key={item._id} className="summary-card">
-                  <div className="summary-label">{item._id}</div>
-                  <div className="summary-value">{item.count}</div>
+                <div key={item._id} className={`um-stat-item ${
+                  item._id === 'Available' ? 'success' :
+                  item._id === 'Issued' ? 'warn' :
+                  item._id === 'Lost' ? 'danger' : 'gray'
+                }`}>
+                  <span>{item._id}</span>
+                  <strong>{item.count}</strong>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="report-section">
-            <h3>Top Active Officers</h3>
-            {/* UI/UX Enhancement: This table now uses the main .table styles */}
-            <div className="officers-table">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Officer</th>
-                    <th>Badge Number</th>
-                    <th>Total Requests</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {reportData.userActivity.map((officer) => (
-                    <tr key={officer._id}>
-                      <td>{officer.firstName} {officer.lastName}</td>
-                      <td>{officer.badgeNumber}</td>
-                      <td>{officer.requestCount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* "Top Active Officers" section is now removed */}
 
-          <div className="report-section">
-            <p>
-              From: <strong>{new Date(reportData.dateRange.startDate).toLocaleDateString()}</strong>
-              {' '} to <strong>{new Date(reportData.dateRange.endDate).toLocaleDateString()}</strong>
+          <div className="um-form-section">
+            <p style={{ textAlign: 'center', color: '#5c5c5c', margin: 0 }}>
+              Report generated for period: 
+              <strong> {new Date(reportData.dateRange.startDate).toLocaleDateString()}</strong> to 
+              <strong> {new Date(reportData.dateRange.endDate).toLocaleDateString()}</strong>
             </p>
           </div>
         </div>
