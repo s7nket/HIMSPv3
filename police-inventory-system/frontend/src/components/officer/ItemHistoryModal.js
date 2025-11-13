@@ -35,7 +35,7 @@ const ItemHistoryModal = ({ poolId, uniqueId, onClose }) => {
   return (
     <div className="modal-overlay" onClick={onClose}>
       {/* 🟢 Make modal wider */}
-      <div className="modal-content equipment-details-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content modal-xl" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>History for Item: {uniqueId}</h3>
           <button onClick={onClose} className="close-btn">&times;</button>

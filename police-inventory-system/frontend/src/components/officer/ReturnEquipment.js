@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { officerAPI } from '../../utils/api';
 import { toast } from 'react-toastify';
-import { useAuth } from '../../context/AuthContext'; // 1. Import useAuth
+import { useAuth } from '../../context/AuthContext';
 
 const ReturnEquipment = ({ onEquipmentReturned }) => {
-  const { user } = useAuth(); // 2. Get user from context
+  const { user } = useAuth();
   const [issuedEquipment, setIssuedEquipment] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showReturnModal, setShowReturnModal] = useState(false);
@@ -34,7 +34,6 @@ const ReturnEquipment = ({ onEquipmentReturned }) => {
     setShowReturnModal(true);
   };
   
-  // This function gets passed down to the card
   const handleRefresh = () => {
     fetchIssuedEquipment();
     if (onEquipmentReturned) onEquipmentReturned();
@@ -42,7 +41,7 @@ const ReturnEquipment = ({ onEquipmentReturned }) => {
 
   if (loading) {
     return (
-      <div className="loading-container">
+      <div className="loading-state">
         <div className="spinner"></div>
         <p>Loading your issued equipment...</p>
       </div>
@@ -50,25 +49,30 @@ const ReturnEquipment = ({ onEquipmentReturned }) => {
   }
 
   return (
-    <div className="return-equipment">
-      <div className="return-header">
-        <h3>Equipment Issued to You</h3>
-        <p>Below are the equipment items currently assigned to you. Click "Return" to submit a return request or "Report Issue" for maintenance.</p>
+    <div>
+      <div className="management-header">
+        <div>
+            <h3>Equipment Issued to You</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+                Manage items currently in your possession.
+            </p>
+        </div>
       </div>
 
       {issuedEquipment.length === 0 ? (
         <div className="no-data">
-          <p>You don't have any equipment issued to you.</p>
+          <h3>No Equipment Issued</h3>
+          <p>You don't have any equipment currently assigned to you.</p>
         </div>
       ) : (
-        <div className="issued-equipment-grid">
+        <div className="equipment-pool-list">
           {issuedEquipment.map((equipment) => (
             <IssuedEquipmentCard
               key={equipment._id}
               equipment={equipment}
               onReturn={handleReturnRequest}
-              onRefresh={handleRefresh} // Pass refresh down
-              policeStation={user?.policeStation} // 3. Pass policeStation
+              onRefresh={handleRefresh}
+              policeStation={user?.policeStation}
             />
           ))}
         </div>
@@ -81,15 +85,14 @@ const ReturnEquipment = ({ onEquipmentReturned }) => {
             setShowReturnModal(false);
             setSelectedEquipment(null);
           }}
-          onSuccess={handleRefresh} // Use refresh function
+          onSuccess={handleRefresh}
         />
       )}
     </div>
   );
 };
 
-// ======== 🟢 MODIFIED THIS COMPONENT 🟢 ========
-const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh, policeStation }) => { // 4. Accept policeStation
+const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh, policeStation }) => {
   const isOverdue = equipment.issuedTo.expectedReturnDate && 
     new Date(equipment.issuedTo.expectedReturnDate) < new Date();
 
@@ -98,53 +101,53 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh, policeStation }) 
   );
   
   const [showMaintModal, setShowMaintModal] = useState(false);
-  const [showLostModal, setShowLostModal] = useState(false); // 1. Added state for new modal
+  const [showLostModal, setShowLostModal] = useState(false);
 
   return (
     <>
-      <div className={`equipment-card issued-card ${isOverdue ? 'overdue' : ''}`}>
-        <div className="equipment-info">
-          <h4>{equipment.name}</h4>
-          <p className="equipment-model">{equipment.model}</p>
-          <div className="equipment-details">
-            <span className="equipment-category">{equipment.category}</span>
-            <span className="equipment-serial">ID: {equipment.serialNumber}</span>
+      <div className={`equipment-card ${isOverdue ? 'overdue' : ''}`} style={isOverdue ? { borderColor: 'var(--color-danger)' } : {}}>
+        <div className="pool-info">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+            <h4>{equipment.name}</h4>
+            {isOverdue && <span className="badge badge-danger">Overdue</span>}
           </div>
-          <div className="issue-details">
-            <div className="issue-info">
-              <strong>Issued:</strong> {new Date(equipment.issuedTo.issuedDate).toLocaleDateString()}
-            </div>
-            <div className="issue-info">
-              <strong>Days Held:</strong> {daysHeld} days
-            </div>
-            {equipment.issuedTo.expectedReturnDate && (
-              <div className={`issue-info ${isOverdue ? 'overdue-text' : ''}`}>
-                <strong>Expected Return:</strong> {new Date(equipment.issuedTo.expectedReturnDate).toLocaleDateString()}
-                {isOverdue && <span className="overdue-label">OVERDUE</span>}
-              </div>
-            )}
+          <p className="equipment-model">{equipment.model} • {equipment.category}</p>
+          <p style={{ fontSize: '13px', color: 'var(--text-light)', marginTop: '4px' }}>Serial: {equipment.serialNumber}</p>
+        </div>
+
+        {/* Reuse pool-summary-stats but override grid to 3 columns for this specific card */}
+        <div className="pool-summary-stats" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+          <div className="stat-item">
+            <strong>{new Date(equipment.issuedTo.issuedDate).toLocaleDateString()}</strong> Issued
+          </div>
+          <div className="stat-item">
+            <strong>{daysHeld}</strong> Days Held
+          </div>
+          <div className="stat-item" style={isOverdue ? { color: 'var(--color-danger-text)' } : {}}>
+            <strong style={isOverdue ? { color: 'var(--color-danger-text)' } : {}}>
+                {equipment.issuedTo.expectedReturnDate ? new Date(equipment.issuedTo.expectedReturnDate).toLocaleDateString() : 'N/A'}
+            </strong> Return By
           </div>
         </div>
 
         <div className="equipment-actions">
-          <div className="action-buttons-container">
-            {/* 2. Button styles updated for clarity */}
+          <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
             <button
               onClick={() => onReturn(equipment)}
-              className={`btn btn-sm ${isOverdue ? 'btn-danger' : 'btn-warning'}`}
+              className={`btn btn-sm ${isOverdue ? 'btn-danger' : 'btn-primary'}`}
             >
-              {isOverdue ? 'Return Overdue' : 'Return Equipment'}
+              Return
             </button>
             <button
               onClick={() => setShowMaintModal(true)}
-              className="btn btn-sm btn-outline-secondary" // Changed style
+              className="btn btn-sm btn-secondary"
             >
               Report Issue
             </button>
-            {/* 3. Added new "Report Lost" button */}
             <button
               onClick={() => setShowLostModal(true)}
               className="btn btn-sm btn-danger"
+              style={{ backgroundColor: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca' }}
             >
               Report Lost
             </button>
@@ -164,11 +167,10 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh, policeStation }) 
         />
       )}
 
-      {/* 4. Added new LostModal renderer */}
       {showLostModal && (
         <LostModal
           equipment={equipment}
-          policeStation={policeStation} // 5. Pass policeStation to LostModal
+          policeStation={policeStation}
           onClose={() => setShowLostModal(false)}
           onSuccess={() => {
             setShowLostModal(false);
@@ -181,13 +183,11 @@ const IssuedEquipmentCard = ({ equipment, onReturn, onRefresh, policeStation }) 
   );
 };
 
-// ======== 🟢 MODIFIED THIS COMPONENT 🟢 ========
 const ReturnModal = ({ equipment, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     reason: '',
     priority: 'Medium',
     condition: equipment?.condition || 'Good',
-    // --- FIR fields removed from here ---
   });
 
   const [loading, setLoading] = useState(false);
@@ -197,7 +197,6 @@ const ReturnModal = ({ equipment, onClose, onSuccess }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // 5. Simplified handleSubmit: It now *only* handles "Return"
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -211,14 +210,13 @@ const ReturnModal = ({ equipment, onClose, onSuccess }) => {
     try {
       await officerAPI.createRequest({
         poolId: equipment.poolId,
-        uniqueId: equipment._id, // Use equipment._id as that's what the parent passes
-        requestType: 'Return', // Hardcoded as "Return"
+        uniqueId: equipment._id,
+        requestType: 'Return',
         reason: formData.reason,
         priority: formData.priority,
         condition: formData.condition
       });
       toast.success('Return request submitted successfully');
-
       onSuccess?.();
       onClose?.();
     } catch (error) {
@@ -244,37 +242,37 @@ const ReturnModal = ({ equipment, onClose, onSuccess }) => {
               name="reason"
               value={formData.reason}
               onChange={handleChange}
+              className="form-control"
               placeholder="Enter reason for returning equipment"
               required
             />
           </div>
     
-          <div className="form-group">
-            <label>Priority</label>
-            <select name="priority" value={formData.priority} onChange={handleChange}>
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
-              <option>Urgent</option>
-            </select>
+          <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="form-group">
+                <label>Priority</label>
+                <select name="priority" value={formData.priority} onChange={handleChange} className="form-control">
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+                <option>Urgent</option>
+                </select>
+            </div>
+        
+            <div className="form-group">
+                <label>Condition</label>
+                <select name="condition" value={formData.condition} onChange={handleChange} className="form-control">
+                <option>Excellent</option>
+                <option>Good</option>
+                <option>Fair</option>
+                <option>Poor</option>
+                </select>
+            </div>
           </div>
-    
-          <div className="form-group">
-            <label>Condition</label>
-            {/* 6. "Lost" option removed from dropdown */}
-            <select name="condition" value={formData.condition} onChange={handleChange}>
-              <option>Excellent</option>
-              <option>Good</option>
-              <option>Fair</option>
-              <option>Poor</option>
-            </select>
-          </div>
-    
-          {/* 7. FIR section removed from this modal */}
           
           <div className="modal-actions">
             <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Submitting...' : 'Submit'}</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>{loading ? 'Submitting...' : 'Submit Return'}</button>
           </div>
         </form>
       </div>
@@ -282,12 +280,11 @@ const ReturnModal = ({ equipment, onClose, onSuccess }) => {
   );
 };
 
-
 const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
-    reason: '', // This is the "problem description"
-    priority: 'High', // Default to High for safety
-    condition: 'Poor' // Default to Poor
+    reason: '',
+    priority: 'High',
+    condition: 'Poor'
   });
   const [loading, setLoading] = useState(false);
 
@@ -304,11 +301,10 @@ const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
     setLoading(true);
 
     try {
-      // This calls the same 'createRequest' route, but with a different type!
       await officerAPI.createRequest({
         poolId: equipment.poolId,
-        uniqueId: equipment._id, // This is the uniqueId
-        requestType: 'Maintenance', // This is the key change
+        uniqueId: equipment._id,
+        requestType: 'Maintenance',
         ...formData
       });
       onSuccess();
@@ -323,32 +319,35 @@ const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Report Issue for: {equipment.name}</h3>
+          <h3>Report Issue: {equipment.name}</h3>
           <button onClick={onClose} className="close-btn">&times;</button>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
-            <div className="equipment-summary">
-              <p>{equipment.model} - ID: {equipment.serialNumber}</p>
+            <div style={{ backgroundColor: 'var(--bg-table-header)', padding: '12px', borderRadius: '8px', marginBottom: '20px' }}>
+              <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)' }}>
+                <strong>Model:</strong> {equipment.model} <br/> 
+                <strong>ID:</strong> {equipment.serialNumber}
+              </p>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Problem Description <span className="required">*</span></label>
+              <label>Problem Description <span style={{ color: 'var(--color-danger)' }}>*</span></label>
               <textarea
                 name="reason"
                 value={formData.reason}
                 onChange={handleChange}
                 className="form-control"
                 rows="4"
-                placeholder="Describe the problem (e.g., 'Sight is misaligned', 'Firing pin jams', 'Radio battery not holding charge')"
+                placeholder="Describe the problem (e.g., 'Sight is misaligned', 'Firing pin jams')"
                 required
               />
             </div>
 
-            <div className="form-row">
+            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
-                <label className="form-label">Urgency</label>
+                <label>Urgency</label>
                 <select
                   name="priority"
                   value={formData.priority}
@@ -361,7 +360,7 @@ const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Current Condition</label>
+                <label>Current Condition</label>
                 <select
                   name="condition"
                   value={formData.condition}
@@ -374,16 +373,13 @@ const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
                 </select>
               </div>
             </div>
-            <div className="form-note">
-              <p>Submitting this will create a maintenance request. You are still responsible for the item until an admin processes the request.</p>
-            </div>
           </div>
           <div className="modal-actions">
             <button type="button" onClick={onClose} className="btn btn-secondary">
               Cancel
             </button>
             <button type="submit" className="btn btn-danger" disabled={loading}>
-              {loading ? 'Submitting...' : 'Submit Maintenance Request'}
+              {loading ? 'Submitting...' : 'Submit Report'}
             </button>
           </div>
         </form>
@@ -392,11 +388,9 @@ const MaintenanceModal = ({ equipment, onClose, onSuccess }) => {
   );
 };
 
-// ======== 泙 8. NEW COMPONENT ADDED (NOW MODIFIED) 泙 ========
-// ======== 泙 8. NEW COMPONENT (NOW WITH ADVANCED VALIDATION) 泙 ========
 const LostModal = ({ equipment, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
-    reason: '', // This is the "description"
+    reason: '',
     firNumber: '',
     firDate: '',
     policeStation: '', 
@@ -404,24 +398,20 @@ const LostModal = ({ equipment, onClose, onSuccess }) => {
     placeOfLoss: '',
     dutyAtTimeOfLoss: '',
     remedialActionTaken: '',
-    condition: 'Lost', // Hardcoded
-    priority: 'Urgent' // Hardcoded
+    condition: 'Lost',
+    priority: 'Urgent'
   });
   const [loading, setLoading] = useState(false);
-  // 1. Add state to hold validation errors
   const [errors, setErrors] = useState({});
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // 2. Clear the specific error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: null }));
     }
   };
 
-  // 3. Create a comprehensive validation function
   const validateForm = () => {
     const { 
       reason, firNumber, firDate, policeStation, dateOfLoss, 
@@ -430,84 +420,38 @@ const LostModal = ({ equipment, onClose, onSuccess }) => {
     
     const newErrors = {};
     const today = new Date();
-    today.setHours(23, 59, 59, 999); // Set to end of today to allow today's date
+    today.setHours(23, 59, 59, 999);
 
-    // --- Date of Loss Validation ---
-    let lossDate;
     if (!dateOfLoss) {
       newErrors.dateOfLoss = 'Date of Loss is required.';
-    } else {
-      lossDate = new Date(dateOfLoss);
-      if (isNaN(lossDate.getTime())) {
-        newErrors.dateOfLoss = 'Invalid date format.';
-      } else if (lossDate > today) {
-        newErrors.dateOfLoss = 'Date of Loss cannot be in the future.';
-      }
+    } else if (new Date(dateOfLoss) > today) {
+      newErrors.dateOfLoss = 'Date of Loss cannot be in the future.';
     }
 
-    // --- Place of Loss Validation ---
-    if (!placeOfLoss || placeOfLoss.trim().length < 5) {
-      newErrors.placeOfLoss = 'Must be at least 5 characters long.';
-    }
-
-    // --- Police Station Validation ---
-    if (!policeStation || policeStation.trim().length < 5) {
-      newErrors.policeStation = 'Must be at least 5 characters long.';
-    }
-
-    // --- Duty Validation ---
-    if (!dutyAtTimeOfLoss || dutyAtTimeOfLoss.trim().length < 5) {
-      newErrors.dutyAtTimeOfLoss = 'Must be at least 5 characters long.';
-    }
+    if (!placeOfLoss || placeOfLoss.trim().length < 5) newErrors.placeOfLoss = 'Must be at least 5 characters long.';
+    if (!policeStation || policeStation.trim().length < 5) newErrors.policeStation = 'Must be at least 5 characters long.';
+    if (!dutyAtTimeOfLoss || dutyAtTimeOfLoss.trim().length < 5) newErrors.dutyAtTimeOfLoss = 'Must be at least 5 characters long.';
     
-    // --- FIR Number Validation (e.g., 123/2025) ---
     const firRegex = /^\d{1,5}\/\d{4}$/;
-    if (!firNumber) {
-      newErrors.firNumber = 'FIR Number is required.';
-    } else if (!firRegex.test(firNumber)) {
-      newErrors.firNumber = 'Format must be XXX/YYYY (e.g., 123/2025).';
-    }
+    if (!firNumber) newErrors.firNumber = 'FIR Number is required.';
+    else if (!firRegex.test(firNumber)) newErrors.firNumber = 'Format must be XXX/YYYY (e.g., 123/2025).';
 
-    // --- FIR Date Validation ---
-    if (!firDate) {
-      newErrors.firDate = 'FIR Date is required.';
-    } else {
-      const firDateObj = new Date(firDate);
-      if (isNaN(firDateObj.getTime())) {
-        newErrors.firDate = 'Invalid date format.';
-      } else if (firDateObj > today) {
-        newErrors.firDate = 'FIR Date cannot be in the future.';
-      } else if (lossDate && firDateObj < lossDate) {
-        // Cross-field validation
-        newErrors.firDate = 'FIR Date cannot be before the Date of Loss.';
-      }
-    }
+    if (!firDate) newErrors.firDate = 'FIR Date is required.';
+    else if (new Date(firDate) > today) newErrors.firDate = 'FIR Date cannot be in the future.';
 
-    // --- Remedial Action Validation ---
-    if (!remedialActionTaken || remedialActionTaken.trim().length < 10) {
-      newErrors.remedialActionTaken = 'Please describe the action taken (min 10 chars).';
-    }
-    
-    // --- Description (Reason) Validation ---
-    if (!reason || reason.trim().length < 10) {
-      newErrors.reason = 'Please describe the incident (min 10 chars).';
-    }
+    if (!remedialActionTaken || remedialActionTaken.trim().length < 10) newErrors.remedialActionTaken = 'Describe action taken (min 10 chars).';
+    if (!reason || reason.trim().length < 10) newErrors.reason = 'Describe incident (min 10 chars).';
     
     setErrors(newErrors);
-    // Return true if newErrors object is empty (no errors)
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // 4. Run validation first
     if (!validateForm()) {
       toast.error('Please correct the errors in the form.');
-      return; // Stop submission
+      return;
     }
-    
-    // If validation passes, proceed with submission
     setLoading(true);
     try {
       await officerAPI.createRequest({
@@ -516,11 +460,10 @@ const LostModal = ({ equipment, onClose, onSuccess }) => {
         requestType: 'Lost',
         condition: 'Lost',
         priority: 'Urgent',
-        ...formData // Send all form data
+        ...formData
       });
-      onSuccess(); // Will show toast in parent
+      onSuccess();
     } catch (error) {
-      // The API interceptor in api.js will handle the toast
       console.error('Failed to submit lost report', error);
     } finally {
       setLoading(false);
@@ -529,38 +472,32 @@ const LostModal = ({ equipment, onClose, onSuccess }) => {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Report Lost Item: {equipment.name}</h3>
           <button onClick={onClose} className="close-btn">&times;</button>
         </div>
 
-        <form onSubmit={handleSubmit} noValidate> {/* noValidate disables browser validation */}
+        <form onSubmit={handleSubmit} noValidate>
           <div className="modal-body">
-            <div className="equipment-summary">
-              <p>{equipment.model} - ID: {equipment.serialNumber}</p>
+            <div style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '12px', borderRadius: '8px', marginBottom: '20px', fontSize: '14px' }}>
+              <strong>Warning:</strong> Reporting an item as lost is a serious matter and will require an official investigation.
             </div>
 
-            <div className="form-note form-note-danger">
-              <p><strong>Warning:</strong> Reporting an item as lost is a serious matter and will require an official investigation.</p>
-            </div>
-
-            {/* 5. Add error display spans under each input */}
-            <div className="form-row">
+            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
-                <label className="form-label">Date of Loss <span className="required">*</span></label>
+                <label>Date of Loss <span style={{ color: 'red' }}>*</span></label>
                 <input
                   type="date"
                   name="dateOfLoss"
                   value={formData.dateOfLoss}
                   onChange={handleChange}
                   className={`form-control ${errors.dateOfLoss ? 'is-invalid' : ''}`}
-                  required
                 />
-                {errors.dateOfLoss && <span className="error-text">{errors.dateOfLoss}</span>}
+                {errors.dateOfLoss && <span style={{ color: 'red', fontSize: '12px' }}>{errors.dateOfLoss}</span>}
               </div>
               <div className="form-group">
-                <label className="form-label">Place of Loss <span className="required">*</span></label>
+                <label>Place of Loss <span style={{ color: 'red' }}>*</span></label>
                 <input
                   type="text"
                   name="placeOfLoss"
@@ -568,15 +505,14 @@ const LostModal = ({ equipment, onClose, onSuccess }) => {
                   onChange={handleChange}
                   className={`form-control ${errors.placeOfLoss ? 'is-invalid' : ''}`}
                   placeholder="e.g., Sector 17 Market"
-                  required
                 />
-                {errors.placeOfLoss && <span className="error-text">{errors.placeOfLoss}</span>}
+                {errors.placeOfLoss && <span style={{ color: 'red', fontSize: '12px' }}>{errors.placeOfLoss}</span>}
               </div>
             </div>
 
-            <div className="form-row">
+            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
-                <label className="form-label">Police Station <span className="required">*</span></label>
+                <label>Police Station <span style={{ color: 'red' }}>*</span></label>
                 <input
                   type="text"
                   name="policeStation"
@@ -584,28 +520,26 @@ const LostModal = ({ equipment, onClose, onSuccess }) => {
                   onChange={handleChange}
                   className={`form-control ${errors.policeStation ? 'is-invalid' : ''}`}
                   placeholder="e.g., Central Station"
-                  required
                 />
-                {errors.policeStation && <span className="error-text">{errors.policeStation}</span>}
+                {errors.policeStation && <span style={{ color: 'red', fontSize: '12px' }}>{errors.policeStation}</span>}
               </div>
               <div className="form-group">
-                <label className="form-label">Duty at Time of Loss <span className="required">*</span></label>
+                <label>Duty at Time of Loss <span style={{ color: 'red' }}>*</span></label>
                 <input
                   type="text"
                   name="dutyAtTimeOfLoss"
                   value={formData.dutyAtTimeOfLoss}
                   onChange={handleChange}
                   className={`form-control ${errors.dutyAtTimeOfLoss ? 'is-invalid' : ''}`}
-                  placeholder="e.g., Night Patrol, Checkpoint"
-                  required
+                  placeholder="e.g., Night Patrol"
                 />
-                {errors.dutyAtTimeOfLoss && <span className="error-text">{errors.dutyAtTimeOfLoss}</span>}
+                {errors.dutyAtTimeOfLoss && <span style={{ color: 'red', fontSize: '12px' }}>{errors.dutyAtTimeOfLoss}</span>}
               </div>
             </div>
             
-            <div className="form-row">
+            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="form-group">
-                <label className="form-label">FIR Number <span className="required">*</span></label>
+                <label>FIR Number <span style={{ color: 'red' }}>*</span></label>
                 <input
                   type="text"
                   name="firNumber"
@@ -613,50 +547,46 @@ const LostModal = ({ equipment, onClose, onSuccess }) => {
                   onChange={handleChange}
                   className={`form-control ${errors.firNumber ? 'is-invalid' : ''}`}
                   placeholder="e.g., 123/2025"
-                  required
                 />
-                {errors.firNumber && <span className="error-text">{errors.firNumber}</span>}
+                {errors.firNumber && <span style={{ color: 'red', fontSize: '12px' }}>{errors.firNumber}</span>}
               </div>
               <div className="form-group">
-                  <label className="form-label">FIR Date <span className="required">*</span></label>
+                  <label>FIR Date <span style={{ color: 'red' }}>*</span></label>
                   <input
                     type="date"
                     name="firDate"
                     value={formData.firDate}
                     onChange={handleChange}
                     className={`form-control ${errors.firDate ? 'is-invalid' : ''}`}
-                    required
                   />
-                  {errors.firDate && <span className="error-text">{errors.firDate}</span>}
+                  {errors.firDate && <span style={{ color: 'red', fontSize: '12px' }}>{errors.firDate}</span>}
                 </div>
             </div>
             
             <div className="form-group">
-              <label className="form-label">Remedial Action Taken <span className="required">*</span></label>
+              <label>Remedial Action Taken <span style={{ color: 'red' }}>*</span></label>
               <textarea
                 name="remedialActionTaken"
                 value={formData.remedialActionTaken}
                 onChange={handleChange}
                 className={`form-control ${errors.remedialActionTaken ? 'is-invalid' : ''}`}
                 rows="3"
-                placeholder="Describe actions taken after the loss (e.g., 'Searched the area', 'Informed duty officer')"
-                required
+                placeholder="Action taken after loss..."
               />
-              {errors.remedialActionTaken && <span className="error-text">{errors.remedialActionTaken}</span>}
+              {errors.remedialActionTaken && <span style={{ color: 'red', fontSize: '12px' }}>{errors.remedialActionTaken}</span>}
             </div>
 
             <div className="form-group">
-              <label className="form-label">Description of Incident <span className="required">*</span></label>
+              <label>Description of Incident <span style={{ color: 'red' }}>*</span></label>
               <textarea
-                name="reason" // This is the 'description'
+                name="reason"
                 value={formData.reason}
                 onChange={handleChange}
                 className={`form-control ${errors.reason ? 'is-invalid' : ''}`}
                 rows="3"
-                placeholder="Describe how the item was lost (min 10 chars)"
-                required
+                placeholder="Describe how the item was lost..."
               />
-              {errors.reason && <span className="error-text">{errors.reason}</span>}
+              {errors.reason && <span style={{ color: 'red', fontSize: '12px' }}>{errors.reason}</span>}
             </div>
             
           </div>

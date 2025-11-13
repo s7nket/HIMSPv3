@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 // Helper function to format date/time
 const formatDateTime = (dateString) => {
   if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleString('en-IN'); // Indian-English locale
+  return new Date(dateString).toLocaleString('en-IN');
 };
 
 // Calculates the duration of use
@@ -72,9 +72,16 @@ const MyHistory = () => {
     setExpandedId(expandedId === id ? null : id);
   };
 
+  // Inline styles to match the grid layout from ViewInventory/ReturnEquipment
+  const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' };
+  const itemStyle = { fontSize: '14px', color: 'var(--text-secondary)' };
+  const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-light)', textTransform: 'uppercase', marginBottom: '4px' };
+  const valueStyle = { color: 'var(--text-primary)', fontWeight: '500' };
+  const subHeaderStyle = { fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '12px', marginTop: '8px' };
+
   if (loading) {
     return (
-      <div className="loading-container">
+      <div className="loading-state">
         <div className="spinner"></div>
         <p>Loading your history...</p>
       </div>
@@ -83,86 +90,115 @@ const MyHistory = () => {
 
   return (
     <div className="my-history">
-      <div className="inventory-header">
-        <h3>My Equipment Usage History</h3>
-        <p>A complete log of all equipment items you have used.</p>
+      <div className="management-header">
+        <div>
+            <h3>My Equipment History</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+                A complete log of all equipment items you have used.
+            </p>
+        </div>
       </div>
 
       {history.length === 0 ? (
         <div className="no-data">
+          <h3>No History Found</h3>
           <p>You have no equipment usage history on file.</p>
         </div>
       ) : (
-        <div className="history-list">
+        <div className="requests-list"> {/* Reusing the list class from OfficerDashboard.css */}
           {history.map((entry) => {
             const isExpanded = expandedId === entry._id;
+            const isCompleted = entry.status === 'Completed';
+
             return (
-              <div key={entry.recordId || entry._id} className="history-item">
+              // Reusing 'request-card' class gives us the white box, shadow, and border
+              <div key={entry.recordId || entry._id} className="request-card" style={{ transition: 'all 0.2s ease' }}>
                 
-                {/* --- COLLAPSED HEADER --- */}
+                {/* --- HEADER (Always Visible) --- */}
+                {/* Added cursor pointer and hover effect inline */}
                 <div 
-                  className={`history-item-header ${isExpanded ? 'expanded' : ''}`}
+                  className="request-header" 
                   onClick={() => handleToggle(entry._id)}
+                  style={{ 
+                    cursor: 'pointer', 
+                    borderBottom: isExpanded ? '1px solid var(--border-color)' : 'none',
+                    background: isExpanded ? 'var(--bg-hover)' : 'var(--bg-table-header)'
+                  }}
                 >
-                  <div className="history-header-left">
-                    <span className="history-item-title">
-                      {entry.equipmentPoolName} ({entry.itemUniqueId})
-                    </span>
-                    <span className="history-item-daterange">
-                      {formatDateRange(entry)}
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div className="request-id" style={{ fontSize: '16px', marginBottom: '4px' }}>
+                      {entry.equipmentPoolName}
+                    </div>
+                    <span style={{ fontSize: '13px', color: 'var(--text-light)' }}>
+                       ID: {entry.itemUniqueId} • {formatDateRange(entry)}
                     </span>
                   </div>
-                  <span className={`badge badge-${entry.status === 'Completed' ? 'success' : 'warning'}`}>
-                    {entry.status}
-                  </span>
+                  
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span className={`badge badge-${isCompleted ? 'success' : 'warning'}`}>
+                        {isCompleted ? 'Returned' : 'In Possession'}
+                    </span>
+                    {/* Simple Chevron Icon */}
+                    <span style={{ color: 'var(--text-light)', transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                      ▼
+                    </span>
+                  </div>
                 </div>
                 
-                {/* --- EXPANDED DETAILS --- */}
+                {/* --- DETAILS (Expandable) --- */}
                 {isExpanded && (
-                  <div className="history-item-details">
+                  <div className="request-details" style={{ animation: 'fadeIn 0.3s ease' }}>
                     
-                    <h5 className="detail-subheader">Context & Condition</h5>
-                    <div className="detail-grid">
-                      <div className="detail-item">
-                        <strong>Reason for Issue:</strong> {entry.purpose}
+                    <h5 style={subHeaderStyle}>Context & Condition</h5>
+                    <div style={gridStyle}>
+                      <div style={itemStyle}>
+                        <span style={labelStyle}>Reason for Issue</span>
+                        <span style={valueStyle}>{entry.purpose}</span>
                       </div>
-                      <div className="detail-item">
-                        <strong>Condition at Issue:</strong> {entry.conditionAtIssue}
+                      <div style={itemStyle}>
+                        <span style={labelStyle}>Condition Issued</span>
+                        <span style={valueStyle}>{entry.conditionAtIssue}</span>
                       </div>
                       
-                      {/* ======== 🟢 MODIFIED THIS BLOCK 🟢 ======== */}
-                      {/* Only show these fields if the item was returned/completed */}
-                      {entry.status === 'Completed' && (
+                      {isCompleted && (
                         <>
-                          <div className="detail-item">
-                            <strong>Reason for Return:</strong> {entry.remarks || 'N/A'}
+                          <div style={itemStyle}>
+                            <span style={labelStyle}>Return Remarks</span>
+                            <span style={valueStyle}>{entry.remarks || 'N/A'}</span>
                           </div>
-                          <div className="detail-item">
-                            <strong>Condition at Return:</strong> {entry.conditionAtReturn || 'N/A'}
+                          <div style={itemStyle}>
+                            <span style={labelStyle}>Condition Returned</span>
+                            <span style={valueStyle}>{entry.conditionAtReturn || 'N/A'}</span>
                           </div>
                         </>
                       )}
                     </div>
 
-                    <h5 className="detail-subheader">Timeline & Chain of Custody</h5>
-                    <div className="detail-grid">
-                      <div className="detail-item">
-                        <strong>Requested:</strong> {formatDateTime(entry.requestDate)}
+                    <h5 style={subHeaderStyle}>Timeline & Custody</h5>
+                    <div style={gridStyle}>
+                      <div style={itemStyle}>
+                        <span style={labelStyle}>Requested</span>
+                        <span style={valueStyle}>{formatDateTime(entry.requestDate)}</span>
                       </div>
-                      <div className="detail-item">
-                        <strong>Issued (Approved):</strong> {formatDateTime(entry.issuedDate)}
+                      <div style={itemStyle}>
+                        <span style={labelStyle}>Issued By</span>
+                        <span style={valueStyle}>{entry.issuedBy?.fullName || 'N/A'}</span>
                       </div>
-                       <div className="detail-item">
-                        <strong>Issued By:</strong> {entry.issuedBy?.fullName || 'N/A'}
+                      <div style={itemStyle}>
+                        <span style={labelStyle}>Approved On</span>
+                        <span style={valueStyle}>{formatDateTime(entry.issuedDate)}</span>
                       </div>
-                      <div className="detail-item">
-                        <strong>Returned:</strong> {formatDateTime(entry.returnedDate)}
+                      <div style={itemStyle}>
+                        <span style={labelStyle}>Returned On</span>
+                        <span style={valueStyle}>{formatDateTime(entry.returnedDate)}</span>
                       </div>
-                      <div className="detail-item">
-                        <strong>Returned To:</strong> {entry.returnedTo?.fullName || 'N/A'}
+                      <div style={itemStyle}>
+                        <span style={labelStyle}>Received By</span>
+                        <span style={valueStyle}>{entry.returnedTo?.fullName || 'N/A'}</span>
                       </div>
-                      <div className="detail-item">
-                        <strong>Duration Used:</strong> {calculateDuration(entry.issuedDate, entry.returnedDate)}
+                      <div style={itemStyle}>
+                        <span style={labelStyle}>Total Duration</span>
+                        <span style={{...valueStyle, color: 'var(--color-primary)'}}>{calculateDuration(entry.issuedDate, entry.returnedDate)}</span>
                       </div>
                     </div>
                     

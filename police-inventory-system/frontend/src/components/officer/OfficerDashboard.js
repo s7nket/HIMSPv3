@@ -3,8 +3,7 @@ import Navigation from '../common/Navigation';
 import RequestEquipment from './RequestEquipment';
 import ViewInventory from './ViewInventory';
 import ReturnEquipment from './ReturnEquipment';
-// import MyRequests from './MyRequests'; // 🛑 REMOVED THIS LINE - This was the error
-import MyHistory from './MyHistory'; // 🟢 This import is correct
+import MyHistory from './MyHistory';
 import { officerAPI } from '../../utils/api';
 import { toast } from 'react-toastify';
 import './OfficerDashboard.css';
@@ -20,7 +19,7 @@ const OfficerDashboard = () => {
     'viewInventory',
     'returnEquipment',
     'myRequests',
-    'myHistory' // 🟢 This is correct
+    'myHistory'
   ];
 
   useEffect(() => {
@@ -107,16 +106,16 @@ const OfficerDashboardStats = ({ stats, recentActivity }) => {
         />
         <StatCard
           icon="🔧"
-          title="Equipment Issued"
+          title="Issued to Me"
           value={stats.myIssuedEquipment}
-          subtitle="Currently with me"
+          subtitle="Currently in possession"
           color="purple"
         />
         <StatCard
           icon="✅"
-          title="Available Equipment"
+          title="Available Pools"
           value={stats.availableEquipment}
-          subtitle="Pools ready to request"
+          subtitle="Ready to request"
           color="green"
         />
       </div>
@@ -149,7 +148,6 @@ const OfficerDashboardStats = ({ stats, recentActivity }) => {
   );
 };
 
-// This component is correctly defined here
 const MyRequests = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -196,7 +194,6 @@ const MyRequests = () => {
       setSelectedRequestId(null);
     } catch (error) {
       toast.error('Failed to cancel request');
-      console.error('Cancel request error:', error);
     }
   };
 
@@ -234,7 +231,7 @@ const MyRequests = () => {
                     <p className="request-meta">
                       {request.poolId?.model} • {request.requestType} • {new Date(request.createdAt).toLocaleString()}
                     </p>
-                    <p className="request-reason">{request.reason}</p>
+                    <p className="request-reason" style={{ marginTop: '8px', color: 'var(--text-secondary)' }}>"{request.reason}"</p>
                   </div>
 
                   {request.status === 'Pending' && (
@@ -305,7 +302,7 @@ const formatSectionTitle = (section) => {
     viewInventory: 'Equipment Inventory',
     returnEquipment: 'Return Equipment',
     myRequests: 'My Requests',
-    myHistory: 'My Equipment History' // 🟢 This is correct
+    myHistory: 'My Equipment History'
   };
   return titles[section] || section;
 };
@@ -319,11 +316,11 @@ const CancelConfirmationModal = ({ onConfirm, onCancel }) => {
           <button onClick={onCancel} className="close-btn">&times;</button>
         </div>
         <div className="modal-body">
-          <p>Are you sure you want to cancel this request?</p>
+          <p>Are you sure you want to cancel this request? This action cannot be undone.</p>
         </div>
-        <div className="modal-actions">
+        <div className="modal-footer">
           <button onClick={onCancel} className="btn btn-secondary">
-            No
+            No, Keep It
           </button>
           <button onClick={onConfirm} className="btn btn-danger">
             Yes, Cancel Request

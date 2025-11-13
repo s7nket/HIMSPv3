@@ -2,14 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { officerAPI } from '../../utils/api';
 import { toast } from 'react-toastify';
 
-/*
-  UI/UX Enhancement: This component is now styled by OfficerDashboard.css.
-  - The filters (.inventory-header) are clean and modern.
-  - The data table is now professionally styled (.inventory-table, .table).
-  - All status/condition badges (.badge) are themed.
-  - The "View Details" modal is now a clean, structured panel.
-*/
-
 const ViewInventory = () => {
   const [equipment, setEquipment] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +28,7 @@ const ViewInventory = () => {
       });
 
       if (response.data.success) {
-        setEquipment(response.data.data.equipment); // 'equipment' is now pools
+        setEquipment(response.data.data.equipment);
         setCategories(response.data.data.categories || []);
         setTotalPages(response.data.data.pagination.pages);
       }
@@ -51,7 +43,7 @@ const ViewInventory = () => {
     try {
       const response = await officerAPI.getEquipmentDetails(poolId);
       if (response.data.success) {
-        setSelectedPool(response.data.data.equipment); // 'equipment' is now pool
+        setSelectedPool(response.data.data.equipment);
         setShowDetailsModal(true);
       }
     } catch (error) {
@@ -61,8 +53,7 @@ const ViewInventory = () => {
 
   if (loading) {
     return (
-      /* UI/UX Enhancement: Styled by .loading-container */
-      <div className="loading-container">
+      <div className="loading-state">
         <div className="spinner"></div>
         <p>Loading authorized equipment pools...</p>
       </div>
@@ -71,41 +62,38 @@ const ViewInventory = () => {
 
   return (
     <div className="view-inventory">
-      {/* UI/UX Enhancement: Styled by .inventory-header */ }
-      <div className="inventory-header">
+      <div className="management-header">
         <div className="search-filters">
           <input
             type="text"
             placeholder="Search equipment pools..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="form-control"
+            className="filter-search"
           />
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="form-control"
+            className="filter-select"
           >
             <option value="">All Categories</option>
             {categories.map(category => (
               <option key={category} value={category}>{category}</option>
             ))}
           </select>
-          {/* Removed status filter as we are viewing pools, not individual items */}
         </div>
-        <div className="inventory-stats">
+        <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
           {equipment.length} pools found
         </div>
       </div>
 
       {equipment.length === 0 ? (
-        /* UI/UX Enhancement: Styled by .no-data */
         <div className="no-data">
-          <p>No equipment pools found matching your criteria or authorized for your designation.</p>
+          <h3>No Results</h3>
+          <p>No equipment pools found matching your criteria.</p>
         </div>
       ) : (
         <>
-          {/* UI/UX Enhancement: Styled by .inventory-table & .table */ }
           <div className="inventory-table">
             <table className="table">
               <thead>
@@ -113,7 +101,7 @@ const ViewInventory = () => {
                   <th>Pool Name</th>
                   <th>Category</th>
                   <th>Model</th>
-                  <th>Total Quantity</th>
+                  <th>Total</th>
                   <th>Available</th>
                   <th>Issued</th>
                   <th>Location</th>
@@ -125,8 +113,7 @@ const ViewInventory = () => {
                   <tr key={pool._id}>
                     <td>
                       <strong>{pool.poolName}</strong>
-                      <br />
-                      <small>{pool.manufacturer}</small>
+                      <div style={{ fontSize: '12px', color: 'var(--text-light)' }}>{pool.manufacturer}</div>
                     </td>
                     <td>{pool.category}</td>
                     <td>{pool.model}</td>
@@ -142,12 +129,11 @@ const ViewInventory = () => {
                     <td>{pool.issuedCount}</td>
                     <td>{pool.location}</td>
                     <td>
-                      {/* UI/UX Enhancement: Styled by .btn */ }
                       <button
                         onClick={() => handleViewDetails(pool._id)}
-                        className="btn btn-info btn-sm"
+                        className="btn btn-secondary btn-sm"
                       >
-                        View Details
+                        Details
                       </button>
                     </td>
                   </tr>
@@ -157,7 +143,6 @@ const ViewInventory = () => {
           </div>
 
           {totalPages > 1 && (
-            /* UI/UX Enhancement: Styled by .pagination */
             <div className="pagination">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
@@ -192,103 +177,82 @@ const ViewInventory = () => {
   );
 };
 
-/*
-  UI/UX Enhancement: This modal is now styled by:
-  - .equipment-details-modal (for custom width)
-  - .detail-section (for the gray info boxes)
-  - .detail-grid (for the 2-column layout)
-*/
 const EquipmentDetailsModal = ({ pool, onClose }) => {
+  // Helper style for grid items
+  const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' };
+  const itemStyle = { fontSize: '14px', color: 'var(--text-secondary)' };
+  const labelStyle = { display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--text-light)', textTransform: 'uppercase', marginBottom: '4px' };
+  const valueStyle = { color: 'var(--text-primary)', fontWeight: '500' };
+  const sectionStyle = { backgroundColor: 'var(--bg-table-header)', padding: '16px', borderRadius: '8px', marginBottom: '20px' };
+  const h4Style = { marginTop: 0, marginBottom: '12px', fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' };
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content equipment-details-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Equipment Pool Details: {pool.poolName}</h3>
+          <h3>Pool Details: {pool.poolName}</h3>
           <button onClick={onClose} className="close-btn">&times;</button>
         </div>
 
-        <div className="equipment-details">
-          <div className="detail-section">
-            <h4>Pool Information</h4>
-            <div className="detail-grid">
-              <div className="detail-item">
-                <strong>Pool Name:</strong> {pool.poolName}
-              </div>
-              <div className="detail-item">
-                <strong>Model:</strong> {pool.model}
-              </div>
-              <div className="detail-item">
-                <strong>Category:</strong> {pool.category}
-              </div>
-              <div className="detail-item">
-                <strong>Manufacturer:</strong> {pool.manufacturer}
-              </div>
-              <div className="detail-item">
-                <strong>Location:</strong> {pool.location}
-              </div>
-              <div className="detail-item">
-                <strong>Total Quantity:</strong> {pool.totalQuantity}
-              </div>
-              <div className="detail-item">
-                <strong>Available Count:</strong>
+        <div className="modal-body">
+          
+          {/* General Info Section */}
+          <div style={sectionStyle}>
+            <h4 style={h4Style}>Information</h4>
+            <div style={gridStyle}>
+              <div style={itemStyle}><span style={labelStyle}>Model</span><span style={valueStyle}>{pool.model}</span></div>
+              <div style={itemStyle}><span style={labelStyle}>Category</span><span style={valueStyle}>{pool.category}</span></div>
+              <div style={itemStyle}><span style={labelStyle}>Manufacturer</span><span style={valueStyle}>{pool.manufacturer}</span></div>
+              <div style={itemStyle}><span style={labelStyle}>Location</span><span style={valueStyle}>{pool.location}</span></div>
+            </div>
+          </div>
+
+          {/* Statistics Section */}
+          <div style={sectionStyle}>
+            <h4 style={h4Style}>Inventory Status</h4>
+            <div style={gridStyle}>
+              <div style={itemStyle}><span style={labelStyle}>Total Quantity</span><span style={valueStyle}>{pool.totalQuantity}</span></div>
+              <div style={itemStyle}><span style={labelStyle}>Available</span>
                 <span className={`badge badge-${
-                  pool.availableCount > 10 ? 'success' :
-                  pool.availableCount > 5 ? 'warning' : 'danger'
-                }`}>
-                  {pool.availableCount}
+                    pool.availableCount > 10 ? 'success' :
+                    pool.availableCount > 5 ? 'warning' : 'danger'
+                }`} style={{ verticalAlign: 'middle', marginLeft: '4px' }}>
+                    {pool.availableCount}
                 </span>
               </div>
-              <div className="detail-item">
-                <strong>Issued Count:</strong> {pool.issuedCount}
-              </div>
-              <div className="detail-item">
-                <strong>Maintenance Count:</strong> {pool.maintenanceCount}
-              </div>
-              <div className="detail-item">
-                <strong>Damaged Count:</strong> {pool.damagedCount}
-              </div>
+              <div style={itemStyle}><span style={labelStyle}>Issued</span><span style={valueStyle}>{pool.issuedCount}</span></div>
+              <div style={itemStyle}><span style={labelStyle}>Maintenance</span><span style={{...valueStyle, color: 'var(--color-warning-text)'}}>{pool.maintenanceCount}</span></div>
+              <div style={itemStyle}><span style={labelStyle}>Damaged/Lost</span><span style={{...valueStyle, color: 'var(--color-danger-text)'}}>{pool.damagedCount}</span></div>
             </div>
           </div>
 
-          <div className="detail-section">
-            <h4>Authorization</h4>
-            <div className="detail-grid">
-              <div className="detail-item full-width">
-                <strong>Authorized Designations:</strong>
-                <ul>
-                  {pool.authorizedDesignations.map(d => <li key={d}>{d}</li>)}
+          {/* Authorization & Meta */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={sectionStyle}>
+                <h4 style={h4Style}>Authorized For</h4>
+                <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '14px', color: 'var(--text-primary)' }}>
+                    {pool.authorizedDesignations.map(d => <li key={d}>{d}</li>)}
                 </ul>
-              </div>
             </div>
-          </div>
-
-          <div className="detail-section">
-            <h4>Metadata</h4>
-            <div className="detail-grid">
-              <div className="detail-item">
-                <strong>Purchase Date:</strong> {pool.purchaseDate ? new Date(pool.purchaseDate).toLocaleDateString() : 'N/A'}
-              </div>
-              <div className="detail-item">
-                <strong>Total Cost:</strong> {pool.totalCost ? `$${pool.totalCost}` : 'N/A'}
-              </div>
-              <div className="detail-item">
-                <strong>Supplier:</strong> {pool.supplier || 'N/A'}
-              </div>
-              <div className="detail-item">
-                <strong>Added By:</strong> {pool.addedBy?.fullName} ({pool.addedBy?.officerId})
-              </div>
-              <div className="detail-item">
-                <strong>Last Modified:</strong> {pool.updatedAt ? new Date(pool.updatedAt).toLocaleDateString() : 'N/A'}
-              </div>
+            <div style={sectionStyle}>
+                <h4 style={h4Style}>Metadata</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={itemStyle}><span style={labelStyle}>Cost</span><span style={valueStyle}>{pool.totalCost ? `$${pool.totalCost}` : 'N/A'}</span></div>
+                    <div style={itemStyle}><span style={labelStyle}>Supplier</span><span style={valueStyle}>{pool.supplier || 'N/A'}</span></div>
+                </div>
             </div>
           </div>
 
           {pool.notes && (
-            <div className="detail-section">
-              <h4>Notes</h4>
-              <p>{pool.notes}</p>
+            <div style={sectionStyle}>
+              <h4 style={h4Style}>Notes</h4>
+              <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary)' }}>{pool.notes}</p>
             </div>
           )}
+        </div>
+        
+        <div className="modal-actions">
+            <button onClick={onClose} className="btn btn-secondary">Close</button>
         </div>
       </div>
     </div>

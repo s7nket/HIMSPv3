@@ -1372,30 +1372,40 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 .um-details-grid {
   display: grid;
-  /* Creates 3 columns, but they can be smaller if needed */
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 20px 32px; /* balanced horizontal & vertical gaps */
+  align-items: start; /* keeps label/value pairs top-aligned */
 }
 
 .um-detail-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 6px; /* slightly larger for clarity */
+  padding: 4px 0;
 }
 
 .um-detail-label {
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-light); /* Lighter color for label */
+  font-size: var(--text-sm, 0.85rem);
+  font-weight: 600;
+  color: var(--text-light, #777);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  line-height: 1.2;
 }
 
 .um-detail-value {
-  font-size: var(--text-base);
+  font-size: var(--text-base, 1rem);
   font-weight: 500;
-  color: var(--text-primary);
-  /* In case the value is a badge */
-  display: flex; 
-  align-items: center;
+  color: var(--text-primary, #222);
+  line-height: 1.4;
+  word-break: break-word; /* handles long text gracefully */
+}
+
+/* Optional: consistent heading spacing */
+.um-form-section h4 {
+  margin-bottom: 16px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary, #222);
 }

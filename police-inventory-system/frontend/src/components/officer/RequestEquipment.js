@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
-// ======== 🟢 MODIFIED 🟢 ========
-import { officerAPI, handleApiError, equipmentAPI } from '../../utils/api'; 
+import { officerAPI, handleApiError } from '../../utils/api'; 
 import { toast } from 'react-toastify';
-// ======== 🟢 MODIFIED 🟢 ========
-import ItemHistoryModal from './ItemHistoryModal'; // Import the new modal
-
-// ... (RequestEquipment component setup is unchanged) ...
+import ItemHistoryModal from './ItemHistoryModal';
 
 const RequestEquipment = ({ onRequestSubmitted }) => {
   const [pools, setPools] = useState([]);
@@ -33,7 +29,6 @@ const RequestEquipment = ({ onRequestSubmitted }) => {
   }, [categoryFilter, searchTerm]);
 
   const fetchAuthorizedPools = async () => {
-    // ... (this function is unchanged)
     try {
       setLoading(true);
       const response = await officerAPI.getAuthorizedEquipmentPools({
@@ -42,8 +37,7 @@ const RequestEquipment = ({ onRequestSubmitted }) => {
       });
       
       if (response.data.success) {
-        const availablePools = response.data.data.pools.filter(pool => pool.availableCount > 0);
-        setPools(availablePools);
+        setPools(response.data.data.pools);
       }
     } catch (error) {
       console.error('Error fetching authorized pools:', error);
@@ -54,7 +48,6 @@ const RequestEquipment = ({ onRequestSubmitted }) => {
   };
 
   const handleInputChange = (e) => {
-    // ... (this function is unchanged)
     const { name, value } = e.target;
     setRequestData(prevData => ({
       ...prevData,
@@ -63,7 +56,6 @@ const RequestEquipment = ({ onRequestSubmitted }) => {
   };
 
   const handleOpenModal = (pool) => {
-    // ... (this function is unchanged)
     setSelectedPool(pool);
     setRequestData({
       reason: '',
@@ -75,7 +67,6 @@ const RequestEquipment = ({ onRequestSubmitted }) => {
   };
 
   const handleSubmitRequest = async (e) => {
-    // ... (this function is unchanged)
     e.preventDefault();
 
     if (!selectedPool || !selectedPool._id) {
@@ -120,41 +111,39 @@ const RequestEquipment = ({ onRequestSubmitted }) => {
     }
   };
 
-  const filteredPools = pools.filter(pool => pool.availableCount > 0);
+  const filteredPools = pools; 
 
   const PoolStatusMessage = () => {
-    // ... (this function is unchanged)
-    if (loading) return <p className="status-text">Loading authorized equipment pools...</p>;
-    if (pools.length === 0 && !categoryFilter && !searchTerm) return <p className="status-text no-pools">No equipment pools are currently authorized for your designation.</p>;
-    if (pools.length === 0) return <p className="status-text no-pools">No pools found matching your filters.</p>;
-    if (filteredPools.length === 0) return <p className="status-text all-issued">All authorized equipment for this filter is currently issued or under maintenance.</p>;
+    if (loading) return <div className="loading-state"><div className="spinner"></div><p>Loading pools...</p></div>;
+    if (pools.length === 0 && !categoryFilter && !searchTerm) return <div className="no-data"><p>No equipment pools are currently authorized.</p></div>;
+    if (pools.length === 0) return <div className="no-data"><p>No pools found matching your filters.</p></div>;
     return null;
   };
 
   return (
     <div className="request-equipment-section">
-      {/* ... (filter bar and pool list JSX is unchanged) ... */}
-      <h3>Request Equipment</h3>
-      
-      <div className="filter-bar">
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value)}
-          className="filter-select"
-        >
-          <option value="">All Categories</option>
-          {categories.map(cat => (
-            <option key={cat} value={cat}>{cat}</option>
-          ))}
-        </select>
-        
-        <input
-          type="text"
-          placeholder="Search by name, model, or manufacturer..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="filter-search"
-        />
+      <div className="management-header">
+        <h3>Request Equipment</h3>
+        <div className="search-filters">
+            <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="filter-select"
+            >
+            <option value="">All Categories</option>
+            {categories.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+            ))}
+            </select>
+            
+            <input
+            type="text"
+            placeholder="Search equipment..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="filter-search"
+            />
+        </div>
       </div>
 
       <div className="equipment-pool-list">
@@ -163,23 +152,26 @@ const RequestEquipment = ({ onRequestSubmitted }) => {
         {filteredPools.map(pool => (
           <div key={pool._id} className="pool-card">
             <div className="pool-info">
-              <h4>{pool.poolName} ({pool.model})</h4>
-              <p>Category: {pool.category} | Manufacturer: {pool.manufacturer || 'N/A'}</p>
+              <h4>{pool.poolName}</h4>
+              <p className="equipment-model">{pool.model} • {pool.category}</p>
             </div>
             
             <div className="pool-summary-stats">
-              <span className="stat-item available">
+              <div className="stat-item available">
                 <strong>{pool.availableCount}</strong> Available
-              </span>
-              <span className="stat-item issued">
-                <strong>{pool.issuedCount}</strong> Currently Issued
-              </span>
-              <span className="stat-item maintenance">
-                <strong>{pool.maintenanceCount}</strong> In Maintenance
-              </span>
-              <span className="stat-item total">
+              </div>
+              <div className="stat-item issued">
+                <strong>{pool.issuedCount}</strong> Issued
+              </div>
+              <div className="stat-item maintenance">
+                <strong>{pool.maintenanceCount}</strong> Maint.
+              </div>
+              <div className="stat-item lost">
+                <strong>{pool.lostCount || 0}</strong> Lost
+              </div>
+              <div className="stat-item total">
                 <strong>{pool.totalQuantity}</strong> Total
-              </span>
+              </div>
             </div>
             
             <div className="pool-actions">
@@ -188,7 +180,7 @@ const RequestEquipment = ({ onRequestSubmitted }) => {
                 onClick={() => handleOpenModal(pool)}
                 disabled={pool.availableCount === 0}
               >
-                Request
+                {pool.availableCount > 0 ? 'Request Equipment' : 'Unavailable'}
               </button>
             </div>
           </div>
@@ -196,8 +188,6 @@ const RequestEquipment = ({ onRequestSubmitted }) => {
       </div>
 
       {showRequestModal && selectedPool && (
-        // ======== 🟢 MODIFIED 🟢 ========
-        // Pass all modal functions to the new RequestModal component
         <RequestModal
           pool={selectedPool}
           requestData={requestData}
@@ -210,10 +200,6 @@ const RequestEquipment = ({ onRequestSubmitted }) => {
   );
 };
 
-// ======== 🟢 NEW COMPONENT 🟢 ========
-// We've extracted the modal logic into its own component
-// to manage the new history-fetching state.
-
 const RequestModal = ({ pool, requestData, onClose, onSubmit, onInputChange }) => {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [availableItems, setAvailableItems] = useState([]);
@@ -222,7 +208,6 @@ const RequestModal = ({ pool, requestData, onClose, onSubmit, onInputChange }) =
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedUniqueId, setSelectedUniqueId] = useState(null);
 
-  // Function to fetch the full pool details and filter for available items
   const fetchAvailableItems = async () => {
     setLoadingDetails(true);
     try {
@@ -241,7 +226,6 @@ const RequestModal = ({ pool, requestData, onClose, onSubmit, onInputChange }) =
     }
   };
 
-  // Handler to open the item history modal
   const handleViewHistory = (uniqueId) => {
     setSelectedUniqueId(uniqueId);
     setShowHistoryModal(true);
@@ -250,17 +234,19 @@ const RequestModal = ({ pool, requestData, onClose, onSubmit, onInputChange }) =
   return (
     <>
       <div className="modal-overlay" onClick={onClose}>
-        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        {/* 🟢 UPDATED: Added 'modal-lg' class for wider modal */}
+        <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
-            <h3>Request from Pool: {pool.poolName}</h3>
-            <p>Available: {pool.availableCount}</p>
+            <h3>Request: {pool.poolName}</h3>
+            <button onClick={onClose} className="close-btn">&times;</button>
           </div>
           
           <form onSubmit={onSubmit}>
             <div className="modal-body">
               <div className="form-group">
-                <label>Reason / Purpose <span className="required">*</span></label>
+                <label>Reason / Purpose <span style={{ color: 'var(--color-danger)' }}>*</span></label>
                 <textarea
+                  className="form-control"
                   name="reason" 
                   value={requestData.reason} 
                   onChange={onInputChange}
@@ -270,10 +256,11 @@ const RequestModal = ({ pool, requestData, onClose, onSubmit, onInputChange }) =
                 />
               </div>
 
-              <div className="form-row">
+              <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div className="form-group">
-                  <label>Urgency / Priority</label>
+                  <label>Priority</label>
                   <select
+                    className="form-control"
                     name="priority"
                     value={requestData.priority}
                     onChange={onInputChange}
@@ -284,19 +271,19 @@ const RequestModal = ({ pool, requestData, onClose, onSubmit, onInputChange }) =
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Expected Duration</label>
+                  <label>Duration</label>
                   <input
+                    className="form-control"
                     type="text"
                     name="expectedDuration"
                     value={requestData.expectedDuration}
                     onChange={onInputChange}
-                    placeholder="e.g., 7 days, 1 month"
+                    placeholder="e.g., 7 days"
                   />
                 </div>
               </div>
 
-              {/* ======== 🟢 NEW HISTORY SECTION 🟢 ======== */}
-              <div className="detail-section">
+              <div className="form-group">
                 {!showItems ? (
                   <button 
                     type="button" 
@@ -304,23 +291,24 @@ const RequestModal = ({ pool, requestData, onClose, onSubmit, onInputChange }) =
                     onClick={fetchAvailableItems}
                     disabled={loadingDetails}
                   >
-                    {loadingDetails ? 'Loading Items...' : 'View Available Item History'}
+                    {loadingDetails ? 'Loading...' : 'View Available Item History'}
                   </button>
                 ) : (
                   <>
                     <label>Available Items ({availableItems.length})</label>
-                    <div className="item-history-list">
+                    <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '8px' }}>
                       {availableItems.length === 0 ? (
-                        <p>No specific items are listed as available.</p>
+                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>No specific items listed.</p>
                       ) : (
                         availableItems.map(item => (
-                          <div key={item.uniqueId} className="item-history-row">
-                            <span>
-                              <strong>ID:</strong> {item.uniqueId} | <strong>Condition:</strong> {item.condition}
+                          <div key={item.uniqueId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', borderBottom: '1px solid var(--border-color)' }}>
+                            <span style={{ fontSize: '13px' }}>
+                              <strong>ID:</strong> {item.uniqueId} <span style={{ margin: '0 8px', color: '#ccc' }}>|</span> 
+                              <strong>Cond:</strong> {item.condition}
                             </span>
                             <button 
                               type="button" 
-                              className="btn btn-info btn-sm"
+                              className="btn btn-secondary btn-sm"
                               onClick={() => handleViewHistory(item.uniqueId)}
                             >
                               View History
@@ -332,7 +320,6 @@ const RequestModal = ({ pool, requestData, onClose, onSubmit, onInputChange }) =
                   </>
                 )}
               </div>
-              {/* ===================================== */}
 
             </div>
 
@@ -352,7 +339,6 @@ const RequestModal = ({ pool, requestData, onClose, onSubmit, onInputChange }) =
         </div>
       </div>
 
-      {/* This will show the ItemHistoryModal when a uniqueId is selected */}
       {showHistoryModal && (
         <ItemHistoryModal
           poolId={pool._id}
@@ -363,6 +349,5 @@ const RequestModal = ({ pool, requestData, onClose, onSubmit, onInputChange }) =
     </>
   );
 };
-
 
 export default RequestEquipment;
